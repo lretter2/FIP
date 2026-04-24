@@ -1,6 +1,6 @@
 # Financial Intelligence Platform (FIP) —  Reference Guide
 
-> **Version:** 1.0.0 | **Last Updated:** 2026-04-17 | **Compliance Scope:** HU GAAP (Act C of 2000)
+> **Version:** 1.0.1 | **Last Updated:** 2026-04-24 | **Compliance Scope:** HU GAAP (Act C of 2000)
 
 ---
 
@@ -119,23 +119,23 @@ FIP is built on an **Azure Lakehouse Medallion Architecture** with three data qu
 
 ## 4. Quick-Start Links
 
-The FIP documentation suite consists of 13 files. This file is the root index.
+The FIP documentation suite consists of the following files. `README.md` (this file) is the root index.
 
 | # | File | Description |
 |---|---|---|
 | 1 | `README.md` *(this file)* | Project overview, module index, environment matrix |
-| 2 | `SETUP_AND_DEPLOYMENT.md` | End-to-end provisioning and deployment guide |
-| 3 | `ARCHITECTURE.md` | Detailed architecture, data flow, AI subsystems |
-| 4 | `DATA_DICTIONARY.md` | Full column-level documentation for all schemas |
-| 5 | `SCHEMA_REFERENCE.md` | DDL reference, schema dependency graph |
-| 6 | `DBT_TRANSFORMATIONS.md` | dbt model documentation, lineage, tests |
-| 7 | `ADF_PIPELINES.md` | Pipeline definitions, trigger configuration, monitoring |
-| 8 | `AI_MODULES.md` | Python AI module reference (anomaly, commentary, forecast, Q&A) |
-| 9 | `SECURITY_AND_RLS.md` | Row-Level Security, Key Vault RBAC, network security |
-| 10 | `MONITORING_AND_ALERTING.md` | Log Analytics, alert rules, Power Automate webhooks |
-| 11 | `HU_GAAP_COMPLIANCE.md` | Statutory requirements mapping, audit procedures |
-| 12 | `RUNBOOK_MONTHLY_CLOSE.md` | Step-by-step monthly close runbook |
-| 13 | `TROUBLESHOOTING.md` | Common issues, diagnostic queries, escalation paths |
+| 2 | `doc/SETUP_AND_DEPLOYMENT.md` | End-to-end provisioning and deployment guide |
+| 3 | `doc/SCHEMA_DATA_DICTIONARY.md` | Full column-level documentation for all schemas and DDL reference |
+| 4 | `doc/SECURITY_AND_COMPLIANCE.md` | Row-Level Security, Key Vault RBAC, network security, compliance |
+| 5 | `doc/RUNBOOKS_AND_TROUBLES.md` | Step-by-step monthly close runbook and troubleshooting guide |
+| 6 | `doc/DATA_DICTIONARY_GENERATION.md` | Automated data dictionary generation procedures |
+| 7 | `doc/Incident response/IR-001_data_pipeline_failure.md` | Incident runbook: data pipeline failure |
+| 8 | `doc/Incident response/IR-002_fx_rate_missing.md` | Incident runbook: FX rate missing |
+| 9 | `dbt/Models/intermediate/IC_ELIMINATION_IMPLEMENTATION_REPORT.md` | Intercompany elimination implementation notes |
+| 10 | `python/TENANT_AWARE_ROUTING.md` | Multi-tenant routing architecture and usage guide |
+| 11 | `PowerBI/DASHBOARD_SPECIFICATIONS.md` | Power BI report and dashboard specifications |
+| 12 | `PowerBI/REPORT_SOURCE_OF_TRUTH.md` | Power BI report field-to-source mapping |
+| 13 | `PowerBI/Rls/RLS_ARCHITECTURE.md` | Power BI Row-Level Security architecture |
 
 ---
 
@@ -143,12 +143,18 @@ The FIP documentation suite consists of 13 files. This file is the root index.
 
 ### 5.1 Python Modules
 
-| Module | CLI Arguments | Primary Function | Key Dependencies |
-|---|---|---|---|
-| `anomaly_detector.py` | `--company_id`, `--period_key` | Detects GL anomalies via Statistical (IsolationForest + Z-score), Structural (rule engine), and Behavioural (velocity/off-hours) methods. Writes to `audit.anomaly_queue`. Fires Power Automate webhook. | scikit-learn 1.5.0, scipy 1.13.0, azure-identity 1.17.0 |
-| `commentary_generator.py` | `--company_id`, `--period_key`, `--roles`, `--languages` | Builds Variance Fact Pack, calls Azure OpenAI gpt-4o, writes narrative commentary to `audit.commentary_queue` with status `PENDING_REVIEW`. | openai 1.30.0, pandas 2.2.0 |
-| `financial_forecaster.py` | `--company_id`, `--forecast_months`, `--base_period_key` | Time-series forecasting: Prophet (requires ≥12 months history) with ARIMA fallback (requires ≥6 months). Writes forecasts to `budget.fact_forecast`. Uses Key Vault secret `synapse-connection-string`. | prophet 1.1.5, statsmodels 0.14.0 |
-| `financial_qa_agent.py` | `--company_id`, `--period_key` (CLI); POST /query, GET /health (FastAPI) | 5-step pipeline: classify intent → vector search (Azure Cognitive Search index `fip-schema-index`) → generate SQL → validate (SQL_BLOCKED_KEYWORDS enforced) → execute → format response. | fastapi, openai 1.30.0, pydantic 2.7.0 |
+| Module | Location | CLI Arguments | Primary Function | Key Dependencies |
+|---|---|---|---|---|
+| `anomaly_detector.py` | `python/Anomaly_detection/` | `--company_id`, `--period_key` | Detects GL anomalies via Statistical (IsolationForest + Z-score), Structural (rule engine), and Behavioural (velocity/off-hours) methods. Writes to `audit.anomaly_queue`. Fires Power Automate webhook. | scikit-learn 1.5.0, scipy 1.13.0, azure-identity 1.17.0 |
+| `commentary_generator.py` | `python/Commentary/` | `--company_id`, `--period_key`, `--roles`, `--languages` | Builds Variance Fact Pack, calls Azure OpenAI gpt-4o, writes narrative commentary to `audit.commentary_queue` with status `PENDING_REVIEW`. | openai 1.30.0, pandas 2.2.0 |
+| `financial_forecaster.py` | `python/Forecasting/` | `--company_id`, `--forecast_months`, `--base_period_key` | Time-series forecasting: Prophet (requires ≥12 months history) with ARIMA fallback (requires ≥6 months). Writes forecasts to `budget.fact_forecast`. Uses Key Vault secret `synapse-connection-string`. | prophet 1.1.5, statsmodels 0.14.0 |
+| `financial_qa_agent.py` | `python/Rag/` | `--company_id`, `--period_key` (CLI); POST /query, GET /health (FastAPI) | 5-step pipeline: classify intent → vector search (Azure Cognitive Search index `fip-schema-index`) → generate SQL → validate (SQL_BLOCKED_KEYWORDS enforced) → execute → format response. | fastapi, openai 1.30.0, pydantic 2.7.0 |
+| `tenant_secured_qa_agent.py` | `python/` | — | Multi-tenant extension of the Q&A agent with per-tenant routing, middleware authentication, and isolated database connections. | fastapi, pydantic 2.7.0 |
+| `tenant_router.py` | `python/` | — | Routes incoming requests to the correct tenant context based on JWT claims or API key headers. | fastapi |
+| `tenant_middleware.py` | `python/` | — | FastAPI middleware that injects tenant context into every request lifecycle. | fastapi |
+| `tenant_config.py` | `python/` | — | Loads and validates per-tenant configuration (Synapse endpoint, Key Vault URI, entity scope). | pydantic 2.7.0 |
+| `db_utils.py` | `python/` | — | Shared database utility functions (connection pooling, retry logic, parameterised query helpers). | pyodbc 5.1.0 |
+| `generate_data_dictionary.py` | `python/tools/` | — | Introspects Synapse schemas and generates a Markdown data dictionary. | pyodbc 5.1.0, pandas 2.2.0 |
 
 #### Shared Environment Variables
 
@@ -209,6 +215,7 @@ The FIP documentation suite consists of 13 files. This file is the root index.
 | `pl_monthly_close` | Scheduled | T+0 to T+7h | Full monthly close sequence |
 | `pl_nbh_fx_rate_load` | Scheduled | Daily 09:00 CET | Load NBH FX rates into `config.ref_fx_rates` |
 | `pl_erp_extract` | Blob event | On file arrival | ERP data extraction from source systems |
+| `pl_dq_validation` | On-demand / scheduled | Post-ingestion | Data quality validation across ingested datasets |
 | A11 (commentary pipeline) | On-demand / scheduled | Post-close | Runs `commentary_generator.py` |
 | A12 (anomaly pipeline) | On-demand / scheduled | Post-close | Runs `anomaly_detector.py` |
 
@@ -302,214 +309,200 @@ Where:
 
 ## 8. Repository Structure
 
-The following structure is inferred from the source code facts and module inventory:
-
 ```
-fip/
-├── infrastructure/
-│   ├── bicep/
-│   │   ├── main.bicep                    # Root orchestrator
-│   │   ├── modules/
-│   │   │   ├── keyvault.bicep
-│   │   │   ├── loganalytics.bicep
-│   │   │   ├── storage.bicep
-│   │   │   ├── adf.bicep
-│   │   │   ├── databricks.bicep
-│   │   │   ├── synapse.bicep
-│   │   │   └── openai.bicep
-│   │   └── parameters/
-│   │       ├── dev.bicepparam
-│   │       ├── ci.bicepparam
-│   │       └── prod.bicepparam
-│   └── scripts/
-│       ├── post_deploy.sh                # Secret population, scope setup
-│       └── smoke_test.sh
+FIP/                                        ← repository root
+├── README.md                               ← this file
+├── CODE_OF_CONDUCT.md
+├── SECURITY.md
+├── python-app.yml                          ← GitHub Actions CI workflow
+├── FIP form_MasterGuide.docx
+├── FIP_Data_Dictionary.xlsx
+├── FIP_PowerBI_Implementation_Guid.docx
+│
+├── fip/
+│   └── Infrastrucutre/                     ← note: folder name matches repo
+│       └── bicep/
+│           ├── main.bicep                  ← root Bicep orchestrator
+│           ├── Modules/
+│           │   ├── keyvault.bicep
+│           │   ├── loganalytics.bicep
+│           │   ├── storage.bicep
+│           │   ├── adf.bicep
+│           │   ├── databricks.bicep
+│           │   ├── synapse.bicep
+│           │   └── openai.bicep
+│           └── Parameters/
+│               ├── dev.bicepparam
+│               ├── ci.bicepparam
+│               └── prod.bicepparam
 │
 ├── sql/
-│   ├── 01_config/                        # Schema execution order: 1
-│   │   ├── ref_entity_master.sql
-│   │   ├── ref_currencies.sql
-│   │   ├── ref_fx_rates.sql
-│   │   ├── ref_fiscal_calendar.sql
-│   │   ├── ref_coa_mapping.sql
-│   │   ├── ref_cost_centre_master.sql
-│   │   ├── ref_project_master.sql
-│   │   ├── ref_intercompany_pairs.sql
-│   │   ├── ref_alert_rules.sql
-│   │   ├── ref_hu_public_holidays.sql
-│   │   └── v_mapping_coverage.sql
-│   ├── 02_audit/                         # Schema execution order: 2
-│   │   ├── batch_log.sql
-│   │   ├── data_quality_log.sql
-│   │   ├── quarantine.sql
-│   │   ├── restatement_log.sql
-│   │   ├── alert_log.sql
-│   │   ├── system_audit_log.sql
-│   │   ├── commentary_queue.sql
-│   │   ├── proc_evaluate_alerts.sql
-│   │   ├── fn_is_valid_period_id.sql
-│   │   ├── v_quarantine_open.sql
-│   │   └── v_alert_summary.sql
-│   ├── 03_bronze/                        # Schema execution order: 3
-│   │   └── ingestion_manifest.sql
-│   ├── 04_silver/                        # Schema execution order: 4
-│   │   ├── dim_date.sql
-│   │   ├── dim_account.sql
-│   │   ├── dim_entity.sql
-│   │   ├── dim_cost_centre.sql
-│   │   ├── dim_currency.sql
-│   │   ├── dim_project.sql
-│   │   ├── account_master.sql
-│   │   └── fact_gl_transaction.sql
-│   ├── 05_budget/                        # Schema execution order: 5
-│   │   ├── ref_budget_versions.sql
-│   │   ├── fact_budget.sql
-│   │   └── fact_forecast.sql
-│   └── 06_gold/                          # Schema execution order: 6
-│       ├── fact_gl_transaction.sql
-│       ├── agg_pl_monthly.sql
-│       ├── agg_balance_sheet.sql
-│       ├── agg_cashflow.sql
-│       ├── agg_variance_analysis.sql
-│       ├── kpi_profitability.sql
-│       ├── kpi_liquidity.sql
-│       ├── kpi_cashflow.sql
-│       └── kpi_project.sql
+│   ├── 01_config/
+│   │   └── fip_schema_config.sql           ← schema execution order: 1
+│   ├── 02_audit/
+│   │   └── fip_schema_audit.sql            ← schema execution order: 2
+│   ├── 03_bronze/
+│   │   └── fip_schema_bronze.sql           ← schema execution order: 3
+│   ├── 04_silver/
+│   │   └── fip_schema_silver.sql           ← schema execution order: 4
+│   ├── 05_budget/
+│   │   └── fip_schema_budget.sql           ← schema execution order: 5
+│   ├── 06_gold/
+│   │   └── fip_schema_gold.sql             ← schema execution order: 6
+│   └── fip_stored_procedures.sql
 │
 ├── dbt/
 │   ├── dbt_project.yml
 │   ├── profiles.yml
 │   ├── packages.yml
-│   ├── macros/
+│   ├── Macros/
 │   │   ├── currency_convert.sql
-│   │   └──  fiscal_period.sql
-│   ├── models/
-│   │   ├── intermediate/
-│   │       ├── int_coa_mapped.sql
-│   │       └── int_fx_converted.sql
-│   │       └── int_ic_elimination.sql
-│   │       └── Intermediate\schema.yml
-│   │       └── IC_ELIMINATION_IMPLEMENTATION_REPORT.md
-│   │   ├── gold/
-│   │       ├── kpi_cashflow.sql
-│   │       └── kpi_liquidity.sql
-│   │       └── kpi_profitability.sql
-│   │       └── kpi_project.sql
-│   │       └── agg_balance_sheet.sql
-│   │       └── agg_cashflow.sql
-│   │       └── agg_pl_monthly.sql
-│   │       └── fct_gl_transaction.sql
-│   │       └── schema.yml
+│   │   └── fiscal_period.sql
+│   ├── Models/
 │   │   ├── staging/
-│   │       ├── stg_budget.sql
-│   │       └── stg_gl_transactions.sql
-│   │       └── stg_balance_sheet.sql
-│   │       └── schema.yml
+│   │   │   ├── stg_gl_transactions.sql
+│   │   │   ├── stg_budget.sql
+│   │   │   ├── stg_balance_sheet.sql
+│   │   │   └── staging_schema.yml
+│   │   ├── intermediate/
+│   │   │   ├── int_coa_mapped.sql
+│   │   │   ├── int_fx_converted.sql
+│   │   │   ├── int_ic_elimination.sql
+│   │   │   ├── intermediate_schema.yml
+│   │   │   └── IC_ELIMINATION_IMPLEMENTATION_REPORT.md
+│   │   └── gold/
+│   │       ├── fct_gl_transaction.sql
+│   │       ├── agg_pl_monthly.sql
+│   │       ├── agg_balance_sheet.sql
+│   │       ├── agg_cashflow.sql
+│   │       ├── kpi_profitability.sql
+│   │       ├── kpi_liquidity.sql
+│   │       ├── kpi_cashflow.sql
+│   │       ├── kpi_project.sql
+│   │       └── gold_schema.yml
 │   ├── Seeds/
 │   │   ├── ref_coa_mapping.csv
-│   │   └── ref_intercompany_pairs.csv
+│   │   ├── ref_intercompany_pairs.csv
+│   │   ├── ref_coa_mapping.xlsx
+│   │   └── Magyar_Szamlatukur_Teljes.xlsx
 │   ├── Snapshots/
-│   │   ├── scd_coa_mapping.sql
-│   ├── tests/
-│   │       ├── assert_balance_sheet_balances.sql
-│   │       └── assert_budget_variance_bounds.sql
-│   │       └── assert_coa_mapping_coverage.sql
-│   │       └── assert_fx_rates_available.sql
-│   │       └── assert_ic_elimination_balances.sql
-│   │       └── assert_no_duplicate_postings.sql
-│   │       └── assert_no_duplicate_source_ids.sql
-│   │       └── assert_no_excessive_late_entries.sql
-│   │       └── assert_no_zero_amount_transactions.sql
-│   │       └── assert_revenue_accounts_no_debit_balance.sql
-│   │       └── assert_valid_currency_codes.sql
-│   │       └── assert_valid_posting_dates.sql
-│   │       └── test_int_coa_mapped_normal_balance.sql
-│   │       └── test_int_coa_mapped_signed_amount.sql
-│   │       └── test_int_fx_converted_eur_direction.sql
-│   │       └── test_int_fx_converted_huf_lcy_passthrough.sql
-│   │       └── test_int_ic_elimination_group_revenue_zero.sql
+│   │   └── scd_coa_mapping.sql
+│   └── Tests/
+│       ├── assert_balance_sheet_balances.sql
+│       ├── assert_budget_variance_bounds.sql
+│       ├── assert_coa_mapping_coverage.sql
+│       ├── assert_fx_rates_available.sql
+│       ├── assert_ic_elimination_balances.sql
+│       ├── assert_no_duplicate_postings.sql
+│       ├── assert_no_duplicate_source_ids.sql
+│       ├── assert_no_excessive_late_entries.sql
+│       ├── assert_no_zero_amount_transactions.sql
+│       ├── assert_revenue_accounts_no_debit_balance.sql
+│       ├── assert_valid_currency_codes.sql
+│       ├── assert_valid_posting_dates.sql
+│       ├── test_int_coa_mapped_normal_balance.sql
+│       ├── test_int_coa_mapped_signed_amount.sql
+│       ├── test_int_fx_converted_eur_direction.sql
+│       ├── test_int_fx_converted_huf_lcy_passthrough.sql
+│       └── test_int_ic_elimination_group_revenue_zero.sql
 │
 ├── python/
+│   ├── requirements.txt
+│   ├── requirements-test.txt
+│   ├── db_utils.py
+│   ├── tenant_config.py
+│   ├── tenant_middleware.py
+│   ├── tenant_router.py
+│   ├── tenant_secured_qa_agent.py
+│   ├── TENANT_AWARE_ROUTING.md
 │   ├── Anomaly_detection/
-│   │   ├──anomaly_detector.py
+│   │   └── anomaly_detector.py
 │   ├── Commentary/
-│   │   ├──commentary_generator.py
+│   │   └── commentary_generator.py
 │   ├── Forecasting/
-│   │   ├──financial_forecaster.py
+│   │   └── financial_forecaster.py
 │   ├── Rag/
-│   │   ├──financial_qa_agent.py
-│   │   └── requirements.txt
-│   │   └──tenant_middleware.py
-│   │   └──tenant_router.py
-│   │   └──tenant_secured_qa_agent.py
-│   │   └──db_utils.py
-│   │   └──tenant_config.py
-│   │   └──TENANT_AWARE_ROUTING.md
-│   ├── test/
-│   │   ├── conftest.py
-│   │   └── test_anomaly_detector.py
-│   │   └── test_tenant_config.py
-│   │   └── test_tenant_router.py
-│   │   └── __init__.py
+│   │   └── financial_qa_agent.py
+│   ├── tools/
+│   │   └── generate_data_dictionary.py
+│   └── tests/
+│       ├── __init__.py
+│       ├── conftest.py
+│       ├── test_anomaly_detector.py
+│       ├── test_tenant_config.py
+│       └── test_tenant_router.py
 │
 ├── adf/
-│   ├── text.txt
-│   ├── pipeline/
+│   ├── Pipeline/
 │   │   ├── pl_monthly_close.json
-│   │   └── pl_nbh_fx_rate_load.json
-│   │   └── pl_erp_extract.json
-│   │   └──azure-pipelines.yml
-│   ├── linkedService/
-│   │   ├── is_azure_openai.json
-│   │   └── is_databricks.json
-│   │   └── is_rest_cobalt.json
-│   │   └── is_rest_sap_b1.json
-│   │   └── is_rest_szamlazz.json
-│   │   └── is_sftp_kulcssoft.json
-│   │   └── is_synapse_sql_pool.json
-│   │   └── is_adls_gen2.json
-│   │   └── is_azure_key_vault.json
-│   ├── trigger/
+│   │   ├── pl_erp_extract.json
+│   │   ├── pl_dq_validation.json
+│   │   └── azure-pipelines.yml
+│   ├── Linked_services/
+│   │   ├── ls_adls_gen2.json
+│   │   ├── ls_azure_key_vault.json
+│   │   ├── ls_azure_openai.json
+│   │   ├── ls_databricks.json
+│   │   ├── ls_rest_cobalt.json
+│   │   ├── ls_rest_sap_b1.json
+│   │   ├── ls_rest_szamlazz.json
+│   │   ├── ls_sftp_kulcssoft.json
+│   │   └── ls_synapse_sql_pool.json
+│   ├── Triggers/
 │   │   ├── trg_monthly_close.json
 │   │   └── trg_fx_rates_daily.json
-│   ├── dataset/
-│   │   ├── ds_rest_cobalt_api.json
-│   │   └── ds_rest_sap_b1_api.json
-│   │   └── ds_rest_szamlazz_api.json
-│   │   └── ds_sftp_erp_source.json
-│   │   └── ds_synapse_audit.json
-│   │   └── ds_synapse_bronze.json
-│   │   └── ds_synapse_config.json
-│   │   └── ds_adls_bronze_landing.json
-│   │   └── ds_adls_manual_upload_zone.json
-│   │   └── ds_bronze_landing_folder.json
+│   └── Dataset/
+│       ├── ds_adls_bronze_landing.json
+│       ├── ds_adls_manual_upload_zone.json
+│       ├── ds_bronze_landing_folder.json
+│       ├── ds_rest_cobalt_api.json
+│       ├── ds_rest_sap_b1_api.json
+│       ├── ds_rest_szamlazz_api.json
+│       ├── ds_sftp_erp_source.json
+│       ├── ds_synapse_audit.json
+│       ├── ds_synapse_bronze.json
+│       └── ds_synapse_config.json
+│
+├── PowerBI/
+│   ├── FIP_PowerBI_Template.pbit
+│   ├── DASHBOARD_SPECIFICATIONS.md
+│   ├── REPORT_SOURCE_OF_TRUTH.md
+│   ├── Dax_measures/
+│   │   ├── FIP_DAX_Measures.dax
+│   │   └── FIP_DAX_Measures_TMSL.json
+│   ├── Dax tests/
+│   ├── Cicd/
+│   └── Rls/
+│       ├── RLS_ARCHITECTURE.md
+│       ├── rls_roles.json
+│       ├── monthly_close_rls_activity_fragment.json
+│       ├── pl_rls_sync_adf_pipeline.json
+│       ├── rls_sync_azure_function.py
+│       └── sync_rls_aad.py
 │
 ├── prompts/
 │   ├── system_prompt_cfo_commentary.txt
-│   └── system_prompt_hu_translation.txt
-│   └── system_prompt_investor_commentary.txt
+│   ├── system_prompt_ceo_commentary.txt
+│   ├── system_prompt_board_commentary.txt
+│   ├── system_prompt_investor_commentary.txt
+│   ├── system_prompt_hu_translation.txt
 │   └── input_validation.txt
-│   └── system_prompt_board_commentary.txt
-│   └── system_prompt_ceo_commentary.txt
 │
-└── docs/
-│    ├── README.md              ← this file
-│    ├── SETUP_AND_DEPLOYMENT.md
-│    ├── ARCHITECTURE.md
-│    ├── CODE_OF_CONDUCT.md
-│    ├── README.md
-│    ├── RUNBOOKS_AND_TROUBLESHOOTING.md
-│    ├── SECURITY.md
-│    ├── SECURITY_AND_COMPLIANCE.md
-│    ├── SETUP_AND_DEPLOYMENT.md
-│    ├── ARCHITECTURE.md
-│    ├── init_project_structure.sh
-│    ├── .env.example
-│    ├── Incident response/
-│    ├── Vendor dpa/
-│    │   ├── README.md
-│    │   └── API_DOCUMENTATION.md
-│    
+├── Remediation/
+│   ├── Adf dataset/
+│   ├── Dbt test/
+│   └── Devops/
+│
+└── doc/
+    ├── README.md
+    ├── DATA_DICTIONARY_GENERATION.md
+    ├── RUNBOOKS_AND_TROUBLES.md
+    ├── SCHEMA_DATA_DICTIONARY.md
+    ├── SECURITY_AND_COMPLIANCE.md
+    ├── SETUP_AND_DEPLOYMENT.md
+    └── Incident response/
+        ├── IR-001_data_pipeline_failure.md
+        └── IR-002_fx_rate_missing.md
 ```
 
 ---
@@ -532,7 +525,7 @@ dbt --version             # dbt-core + dbt-synapse
 ### High-Level Deployment Sequence
 
 1. **Clone the repository** and review `infrastructure/bicep/parameters/` for your target environment.
-2. **Deploy Azure infrastructure** using Bicep in the correct module order (Key Vault first, OpenAI last). See `SETUP_AND_DEPLOYMENT_.md` for the full procedure.
+2. **Deploy Azure infrastructure** using Bicep in the correct module order (Key Vault first, OpenAI last). See `doc/SETUP_AND_DEPLOYMENT.md` for the full procedure.
 3. **Populate Key Vault secrets** (passwords, PAT tokens, API keys, webhook URLs).
 4. **Configure Databricks secret scope** backed by Key Vault (`fip-kv`).
 5. **Deploy SQL schemas** in the mandatory execution order: config → audit → bronze → silver → budget → gold.
@@ -541,7 +534,7 @@ dbt --version             # dbt-core + dbt-synapse
 8. **Run smoke tests** to verify end-to-end data flow.
 9. **Configure Power BI** DirectQuery connection to Synapse gold zone views.
 
-For the complete step-by-step guide, refer to `SETUP_AND_DEPLOYMENT.md`.
+For the complete step-by-step guide, refer to `doc/SETUP_AND_DEPLOYMENT.md`.
 
 ---
 
@@ -566,4 +559,4 @@ The following terminology is used consistently throughout all FIP documentation,
 
 ---
 
-*This document is part of the FIP Documentation Suite. For architecture details, see `ARCHITECTURE.md`. For deployment instructions, see `SETUP_AND_DEPLOYMENT.md`.*
+*This document is part of the FIP Documentation Suite. For schema and data dictionary details, see `doc/SCHEMA_DATA_DICTIONARY.md`. For deployment instructions, see `doc/SETUP_AND_DEPLOYMENT.md`.*
