@@ -25,12 +25,17 @@ from typing import List, Optional
 
 from anomaly_detector import (
     EBITDA_BUDGET_THRESHOLD,
+    ISOLATION_CONTAMINATION,
     LARGE_POSTING_THRESHOLD,
     MICRO_TX_VELOCITY_LIMIT,
     ZSCORE_THRESHOLD,
     detect_behavioural_anomalies,
     detect_statistical_anomalies,
     detect_structural_anomalies,
+    load_gl_transactions,
+    load_kpi_history,
+    send_critical_alerts,
+    write_anomalies,
 )
 
 _CURRENT_PERIOD = 202601
@@ -210,6 +215,58 @@ class TestDetectStatisticalAnomalies:
             assert "description" in anomaly
             assert "recommended_action" in anomaly
 
+    def test_isolation_forest_flags_multivariate_outlier(self):
+        """An extreme outlier across all KPI dimensions should be flagged by Isolation Forest."""
+        df = _make_kpi_history(n_history=20)
+        hist_mask = df["period_key"] != _CURRENT_PERIOD
+        cur_mask = df["period_key"] == _CURRENT_PERIOD
+        for col in ["revenue", "ebitda", "net_profit", "free_cash_flow"]:
+            df.loc[cur_mask, col] = df.loc[hist_mask, col].mean() + 5 * df.loc[hist_mask, col].std()
+        result = detect_statistical_anomalies(df, _CURRENT_PERIOD)
+        iso_hits = [a for a in result if a["detection_method"] == "ISOLATION_FOREST"]
+        assert len(iso_hits) == 1
+        assert iso_hits[0]["anomaly_class"] == "STATISTICAL"
+        assert iso_hits[0]["kpi_affected"] == "MULTI_KPI"
+
+    def test_isolation_forest_normal_period_not_flagged(self):
+        """A period with values close to historical mean should not be flagged."""
+        df = _make_kpi_history(n_history=20)
+        result = detect_statistical_anomalies(df, _CURRENT_PERIOD)
+        iso_hits = [a for a in result if a["detection_method"] == "ISOLATION_FOREST"]
+        assert len(iso_hits) == 0
+
+    def test_budget_gate_at_exact_threshold_does_not_fire(self):
+        """Exactly at the -15% threshold should NOT trigger (strictly less than)."""
+        df = _make_kpi_history(n_history=20, variance_pct_override=-_BUDGET_THRESHOLD_PCT)
+        result = detect_statistical_anomalies(df, _CURRENT_PERIOD)
+        budget_hits = [a for a in result if a["detection_method"] == "BUDGET_GATE"]
+        assert len(budget_hits) == 0
+
+    def test_budget_gate_missing_variance_column_no_crash(self):
+        """Missing revenue_variance_pct column should not raise an exception."""
+        df = _make_kpi_history(n_history=20)
+        df = df.drop(columns=["revenue_variance_pct"])
+        result = detect_statistical_anomalies(df, _CURRENT_PERIOD)
+        budget_hits = [a for a in result if a["detection_method"] == "BUDGET_GATE"]
+        assert len(budget_hits) == 0
+
+    @pytest.mark.parametrize("zscore,expected_severity", [
+        (10.0, "CRITICAL"),
+        (3.2, "HIGH"),
+        (2.6, "MEDIUM"),
+    ])
+    def test_zscore_severity_mapping(self, zscore, expected_severity):
+        df = _make_kpi_history(n_history=20)
+        hist = df[df["period_key"] != _CURRENT_PERIOD]["revenue"]
+        df.loc[df["period_key"] == _CURRENT_PERIOD, "revenue"] = hist.mean() + zscore * hist.std()
+        result = detect_statistical_anomalies(df, _CURRENT_PERIOD)
+        zscore_hits = [
+            a for a in result
+            if a["detection_method"] == "ZSCORE" and a["kpi_affected"] == "revenue"
+        ]
+        assert len(zscore_hits) >= 1
+        assert zscore_hits[0]["severity"] == expected_severity
+
 
 # ── detect_structural_anomalies ───────────────────────────────────────────────
 
@@ -320,6 +377,32 @@ class TestDetectStructuralAnomalies:
         s4 = [a for a in result if a.get("kpi_affected") == "LARGE_POSTING"]
         assert len(s4) == 1
 
+    def test_s3_handles_empty_balance_sheet_result(self):
+        """No S3 anomaly should be raised when the balance sheet query returns no rows."""
+        df = _make_gl_df(n_rows=1)
+        conn = MagicMock()
+        with patch("anomaly_detector.pd.read_sql", return_value=pd.DataFrame()):
+            result = detect_structural_anomalies(conn, "ENTITY001", _CURRENT_PERIOD, df)
+        s3 = [a for a in result if a.get("kpi_affected") == "BALANCE_SHEET_EQUATION"]
+        assert len(s3) == 0
+
+    def test_s3_handles_database_exception_gracefully(self):
+        """detect_structural_anomalies should not propagate a DB exception from the BS query."""
+        df = _make_gl_df(n_rows=1)
+        conn = MagicMock()
+        with patch("anomaly_detector.pd.read_sql", side_effect=Exception("DB connection lost")):
+            result = detect_structural_anomalies(conn, "ENTITY001", _CURRENT_PERIOD, df)
+        assert isinstance(result, list)
+
+    def test_all_structural_anomalies_have_required_keys(self):
+        df = _make_gl_df(n_rows=1, l1_category="Revenue", net_amounts=[-500_000.0])
+        result = self._run(df)
+        for anomaly in result:
+            assert "anomaly_class" in anomaly
+            assert "severity" in anomaly
+            assert "description" in anomaly
+            assert "recommended_action" in anomaly
+
 
 # ── detect_behavioural_anomalies ──────────────────────────────────────────────
 
@@ -412,3 +495,217 @@ class TestDetectBehaviouralAnomalies:
         result = detect_behavioural_anomalies(df)
         b2 = [a for a in result if a.get("kpi_affected") == "HIGH_VELOCITY_TRANSACTIONS"]
         assert len(b2) == 0
+
+    def test_b2_correctly_parses_string_posting_dates(self):
+        """B2 check should correctly parse string posting_date values without crashing."""
+        df = self._make_velocity_df(MICRO_TX_VELOCITY_LIMIT + 1)
+        df["posting_date"] = "2026-01-15"
+        result = detect_behavioural_anomalies(df)
+        assert isinstance(result, list)
+
+    def test_all_behavioural_anomalies_have_required_keys(self):
+        df = _make_gl_df(n_rows=6, posting_hour=3)
+        result = detect_behavioural_anomalies(df)
+        for anomaly in result:
+            assert "anomaly_class" in anomaly
+            assert "severity" in anomaly
+            assert "description" in anomaly
+            assert "recommended_action" in anomaly
+
+
+# ── write_anomalies ───────────────────────────────────────────────────────────
+
+class TestWriteAnomalies:
+
+    def _make_anomaly(self, severity: str = "HIGH") -> dict:
+        return {
+            "anomaly_class": "STATISTICAL",
+            "detection_method": "ZSCORE",
+            "severity": severity,
+            "kpi_affected": "revenue",
+            "description": "Test anomaly description",
+            "recommended_action": "Investigate immediately",
+        }
+
+    def test_empty_list_returns_zero_and_skips_db(self):
+        conn = MagicMock()
+        result = write_anomalies(conn, "ENTITY001", _CURRENT_PERIOD, [])
+        assert result == 0
+        conn.cursor.assert_not_called()
+        conn.commit.assert_not_called()
+
+    def test_inserts_one_record_per_anomaly(self):
+        conn = MagicMock()
+        cursor = MagicMock()
+        conn.cursor.return_value = cursor
+        result = write_anomalies(conn, "ENTITY001", _CURRENT_PERIOD, [self._make_anomaly()])
+        assert result == 1
+        cursor.execute.assert_called_once()
+        conn.commit.assert_called_once()
+
+    def test_inserts_all_anomalies_before_committing(self):
+        conn = MagicMock()
+        cursor = MagicMock()
+        conn.cursor.return_value = cursor
+        anomalies = [self._make_anomaly("HIGH"), self._make_anomaly("CRITICAL")]
+        result = write_anomalies(conn, "ENTITY001", _CURRENT_PERIOD, anomalies)
+        assert result == 2
+        assert cursor.execute.call_count == 2
+        conn.commit.assert_called_once()
+
+    def test_optional_null_fields_passed_as_none(self):
+        """Anomalies without optional fields should have None in the DB params."""
+        conn = MagicMock()
+        cursor = MagicMock()
+        conn.cursor.return_value = cursor
+        anomaly = {
+            "anomaly_class": "STRUCTURAL",
+            "severity": "HIGH",
+            "kpi_affected": "TEST",
+            # anomaly_score, z_score, current_value, historical_mean absent
+        }
+        write_anomalies(conn, "ENTITY001", _CURRENT_PERIOD, [anomaly])
+        _, params = cursor.execute.call_args.args
+        assert params[8] is None   # anomaly_score
+        assert params[9] is None   # z_score
+        assert params[10] is None  # current_value
+        assert params[11] is None  # historical_mean
+
+    def test_entity_code_and_period_key_passed_to_cursor(self):
+        conn = MagicMock()
+        cursor = MagicMock()
+        conn.cursor.return_value = cursor
+        write_anomalies(conn, "ENTITY001", _CURRENT_PERIOD, [self._make_anomaly()])
+        _, params = cursor.execute.call_args.args
+        assert params[0] == "ENTITY001"
+        assert params[1] == _CURRENT_PERIOD
+
+
+# ── send_critical_alerts ──────────────────────────────────────────────────────
+
+class TestSendCriticalAlerts:
+
+    def _make_anomaly(self, severity: str) -> dict:
+        return {
+            "anomaly_class": "STATISTICAL",
+            "detection_method": "ZSCORE",
+            "severity": severity,
+            "kpi_affected": "revenue",
+            "description": "Test anomaly",
+            "recommended_action": "Check it",
+        }
+
+    def test_no_alert_for_medium_severity_only(self):
+        """MEDIUM anomalies alone should not trigger any HTTP call."""
+        with patch("anomaly_detector.requests.post") as mock_post:
+            with patch("anomaly_detector.POWER_AUTOMATE_URL", "https://example.com/hook"):
+                send_critical_alerts([self._make_anomaly("MEDIUM")], "ENTITY001", _CURRENT_PERIOD)
+        mock_post.assert_not_called()
+
+    def test_no_alert_when_url_not_configured(self):
+        """No HTTP call should be made when POWER_AUTOMATE_URL is empty."""
+        with patch("anomaly_detector.requests.post") as mock_post:
+            with patch("anomaly_detector.POWER_AUTOMATE_URL", ""):
+                send_critical_alerts([self._make_anomaly("CRITICAL")], "ENTITY001", _CURRENT_PERIOD)
+        mock_post.assert_not_called()
+
+    def test_sends_request_for_critical_anomaly(self):
+        """A CRITICAL anomaly triggers an HTTP POST when URL is configured."""
+        with patch("anomaly_detector.requests.post") as mock_post:
+            mock_post.return_value.raise_for_status = MagicMock()
+            with patch("anomaly_detector.POWER_AUTOMATE_URL", "https://example.com/hook"):
+                send_critical_alerts([self._make_anomaly("CRITICAL")], "ENTITY001", _CURRENT_PERIOD)
+        mock_post.assert_called_once()
+
+    def test_sends_request_for_high_anomaly(self):
+        """A HIGH anomaly also triggers an HTTP POST."""
+        with patch("anomaly_detector.requests.post") as mock_post:
+            mock_post.return_value.raise_for_status = MagicMock()
+            with patch("anomaly_detector.POWER_AUTOMATE_URL", "https://example.com/hook"):
+                send_critical_alerts([self._make_anomaly("HIGH")], "ENTITY001", _CURRENT_PERIOD)
+        mock_post.assert_called_once()
+
+    def test_payload_contains_expected_fields(self):
+        """The JSON payload sent to Power Automate must include all required keys."""
+        with patch("anomaly_detector.requests.post") as mock_post:
+            mock_post.return_value.raise_for_status = MagicMock()
+            with patch("anomaly_detector.POWER_AUTOMATE_URL", "https://example.com/hook"):
+                send_critical_alerts(
+                    [self._make_anomaly("CRITICAL")], "ENTITY001", _CURRENT_PERIOD
+                )
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["entity_code"] == "ENTITY001"
+        assert payload["period_key"] == _CURRENT_PERIOD
+        assert payload["alert_count"] == 1
+        assert len(payload["alerts"]) == 1
+        alert = payload["alerts"][0]
+        assert "severity" in alert
+        assert "class" in alert
+        assert "kpi" in alert
+        assert "description" in alert
+        assert "action" in alert
+
+    def test_only_critical_and_high_included_in_payload(self):
+        """MEDIUM anomalies must not appear in the alert payload."""
+        anomalies = [
+            self._make_anomaly("CRITICAL"),
+            self._make_anomaly("HIGH"),
+            self._make_anomaly("MEDIUM"),
+        ]
+        with patch("anomaly_detector.requests.post") as mock_post:
+            mock_post.return_value.raise_for_status = MagicMock()
+            with patch("anomaly_detector.POWER_AUTOMATE_URL", "https://example.com/hook"):
+                send_critical_alerts(anomalies, "ENTITY001", _CURRENT_PERIOD)
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["alert_count"] == 2
+        severities = [a["severity"] for a in payload["alerts"]]
+        assert "MEDIUM" not in severities
+
+    def test_handles_http_error_gracefully(self):
+        """requests.RequestException should be caught and not propagated."""
+        import requests as req
+        with patch("anomaly_detector.requests.post", side_effect=req.RequestException("timeout")):
+            with patch("anomaly_detector.POWER_AUTOMATE_URL", "https://example.com/hook"):
+                # Must not raise
+                send_critical_alerts([self._make_anomaly("CRITICAL")], "ENTITY001", _CURRENT_PERIOD)
+
+
+# ── load_kpi_history / load_gl_transactions ───────────────────────────────────
+
+class TestLoadFunctions:
+
+    def test_load_kpi_history_returns_dataframe_from_sql(self):
+        """load_kpi_history should call pd.read_sql and return its result."""
+        conn = MagicMock()
+        expected = _make_kpi_history(n_history=5)
+        with patch("anomaly_detector.pd.read_sql", return_value=expected) as mock_sql:
+            result = load_kpi_history(conn, "ENTITY001", _CURRENT_PERIOD)
+        mock_sql.assert_called_once()
+        assert result.equals(expected)
+
+    def test_load_kpi_history_passes_entity_and_period_as_params(self):
+        """Entity code and period key must appear in the SQL params."""
+        conn = MagicMock()
+        with patch("anomaly_detector.pd.read_sql", return_value=pd.DataFrame()) as mock_sql:
+            load_kpi_history(conn, "ENTITY001", _CURRENT_PERIOD)
+        params = mock_sql.call_args.kwargs.get("params") or mock_sql.call_args.args[2]
+        assert "ENTITY001" in params
+        assert _CURRENT_PERIOD in params
+
+    def test_load_gl_transactions_returns_dataframe_from_sql(self):
+        """load_gl_transactions should call pd.read_sql and return its result."""
+        conn = MagicMock()
+        expected = _make_gl_df(n_rows=5)
+        with patch("anomaly_detector.pd.read_sql", return_value=expected) as mock_sql:
+            result = load_gl_transactions(conn, "ENTITY001", _CURRENT_PERIOD)
+        mock_sql.assert_called_once()
+        assert result.equals(expected)
+
+    def test_load_gl_transactions_passes_entity_and_period_as_params(self):
+        """Entity code and period key must appear in the GL SQL params."""
+        conn = MagicMock()
+        with patch("anomaly_detector.pd.read_sql", return_value=pd.DataFrame()) as mock_sql:
+            load_gl_transactions(conn, "ENTITY001", _CURRENT_PERIOD)
+        params = mock_sql.call_args.kwargs.get("params") or mock_sql.call_args.args[2]
+        assert "ENTITY001" in params
+        assert _CURRENT_PERIOD in params
