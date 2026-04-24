@@ -1,0 +1,77 @@
+{
+  "name": "ds_sftp_erp_source",
+  "description": "SFTP dataset for Kulcs-Soft ERP monthly GL export. Reads semicolon-delimited CSV files from the SFTP export directory. File name and entity subdirectory are parameterised — the same dataset serves all Kulcs-Soft entity connections. Linked service: ls_sftp_kulcssoft. Remediates FINDING A-02.",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_sftp_kulcssoft",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "entity_code": {
+        "type": "String",
+        "description": "Entity identifier — maps to SFTP sub-directory (e.g. 'ACME_HU'). Must match config.ref_entity_master.entity_code."
+      },
+      "period_year": {
+        "type": "Int",
+        "description": "Four-digit fiscal year of the export (e.g. 2026)."
+      },
+      "period_month": {
+        "type": "Int",
+        "description": "Numeric month of the export, 1–12 (e.g. 3 for March)."
+      },
+      "file_name": {
+        "type": "String",
+        "description": "Exact file name on the SFTP share (e.g. 'GL_202603.csv'). ADF pl_erp_extract resolves this from the directory listing before passing it here.",
+        "defaultValue": ""
+      }
+    },
+    "type": "SftpLocation",
+    "typeProperties": {
+      "type": "DelimitedText",
+      "location": {
+        "type": "SftpLocation",
+        "folderPath": {
+          "value": "@{dataset().entity_code}/@{dataset().period_year}/@{formatNumber(dataset().period_month, '00')}",
+          "type": "Expression"
+        },
+        "fileName": {
+          "value": "@dataset().file_name",
+          "type": "Expression"
+        }
+      },
+      "columnDelimiter": ";",
+      "rowDelimiter": "\n",
+      "encodingName": "UTF-8",
+      "firstRowAsHeader": true,
+      "nullValue": "",
+      "quoteChar": "\"",
+      "escapeChar": "\\",
+      "compressionProperties": null
+    },
+    "schema": [
+      { "name": "transaction_id",       "type": "String",  "description": "Kulcs-Soft internal tranzakcio_azonosito" },
+      { "name": "company_id",           "type": "String",  "description": "Kulcs-Soft ceg_kod (mapped to entity_code)" },
+      { "name": "local_account_code",   "type": "String",  "description": "Foszamla szam (CoA account number, 3–8 digits)" },
+      { "name": "account_description",  "type": "String",  "description": "Foszamla megnevezes" },
+      { "name": "transaction_date",     "type": "String",  "description": "Bizonylat datum (ISO 8601: YYYY-MM-DD)" },
+      { "name": "posting_date",         "type": "String",  "description": "Konyvelesi datum (ISO 8601: YYYY-MM-DD)" },
+      { "name": "document_number",      "type": "String",  "description": "Bizonylat szam" },
+      { "name": "document_type",        "type": "String",  "description": "Bizonylat tipusa (SZ/BEV/KIAD/KIEG)" },
+      { "name": "debit_amount",         "type": "String",  "description": "Tartozik osszeg (HUF, decimal with comma separator)" },
+      { "name": "credit_amount",        "type": "String",  "description": "Kovetkezik osszeg (HUF, decimal with comma separator)" },
+      { "name": "currency_code",        "type": "String",  "description": "ISO 4217 currency code (HUF, EUR, USD, etc.)" },
+      { "name": "debit_amount_fcy",     "type": "String",  "description": "Tartozik osszeg devizaban (FCY amount before conversion)" },
+      { "name": "credit_amount_fcy",    "type": "String",  "description": "Kovetkezik osszeg devizaban" },
+      { "name": "fx_rate",              "type": "String",  "description": "MNB arfolyam (NBH rate used for conversion, HUF per 1 FCY unit)" },
+      { "name": "cost_centre_code",     "type": "String",  "description": "Koltsegkozpont kod (optional; null if not cost-centre tracked)" },
+      { "name": "project_code",         "type": "String",  "description": "Projekt kod (optional; null if not project-tracked)" },
+      { "name": "description",          "type": "String",  "description": "Szoveg / memo (free-text transaction description)" },
+      { "name": "period_year",          "type": "String",  "description": "Ev (fiscal year YYYY)" },
+      { "name": "period_month",         "type": "String",  "description": "Honap (fiscal month 1–12)" },
+      { "name": "source_system_version","type": "String",  "description": "Kulcs-Soft verzioszam (e.g. '12.05.1234')" }
+    ],
+    "annotations": [
+      "erp", "kulcssoft", "sftp", "source", "gl", "bronze"
+    ]
+  }
+}

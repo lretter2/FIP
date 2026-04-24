@@ -1,0 +1,80 @@
+{
+  "name": "ds_rest_sap_b1_api",
+  "description": "REST dataset for SAP Business One Service Layer API (OData v4 over HTTPS). Extracts Journal Entry Lines (JournalEntries endpoint) for a given posting date range. Session authentication is handled at the linked service level via B1SESSION cookie renewal. Linked service: ls_rest_sap_b1. Remediates FINDING A-02.",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_rest_sap_b1",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "date_from": {
+        "type": "String",
+        "description": "Start posting date in ISO 8601 format (YYYY-MM-DD). Used in OData $filter expression."
+      },
+      "date_to": {
+        "type": "String",
+        "description": "End posting date in ISO 8601 format (YYYY-MM-DD)."
+      },
+      "entity_code": {
+        "type": "String",
+        "description": "FIP entity code — used for Bronze path and batch logging. SAP B1 company DB is configured in the linked service Key Vault secret (sap-b1-company-db)."
+      },
+      "skip_rows": {
+        "type": "Int",
+        "description": "OData $skip value for server-side pagination. ADF ForEach loop increments this by page_size until an empty collection is returned.",
+        "defaultValue": 0
+      },
+      "page_size": {
+        "type": "Int",
+        "description": "OData $top value — number of journal entry lines per request. SAP B1 Service Layer default max is 1000.",
+        "defaultValue": 1000
+      }
+    },
+    "type": "RestResource",
+    "typeProperties": {
+      "relativeUrl": {
+        "value": "@{concat('/JournalEntries?$select=JdtNum,TransId,ReferenceDate,DueDate,Memo,TransactionCode,JournalEntryLines/AccountCode,JournalEntryLines/AccountName,JournalEntryLines/Debit,JournalEntryLines/Credit,JournalEntryLines/DebitSys,JournalEntryLines/CreditSys,JournalEntryLines/FCCurrency,JournalEntryLines/FCDebit,JournalEntryLines/FCCredit,JournalEntryLines/CostingCode,JournalEntryLines/ProjectCode,JournalEntryLines/LineMemo&$expand=JournalEntryLines&$filter=ReferenceDate ge ', dataset().date_from, ' and ReferenceDate le ', dataset().date_to, '&$skip=', string(dataset().skip_rows), '&$top=', string(dataset().page_size), '&$orderby=ReferenceDate asc')}",
+        "type": "Expression"
+      },
+      "requestMethod": "GET",
+      "additionalHeaders": {
+        "Accept": "application/json",
+        "Prefer": "odata.maxpagesize=1000"
+      },
+      "paginationRules": {
+        "AbsoluteUrl": "$.odata.nextLink"
+      },
+      "format": {
+        "type": "JsonFormat",
+        "filePattern": "arrayOfObjects",
+        "jsonPathDefinition": {
+          "items": "$.value"
+        }
+      }
+    },
+    "schema": [
+      { "name": "JdtNum",                "type": "Int32",   "description": "SAP B1 Journal Document Number (unique per company DB)" },
+      { "name": "TransId",               "type": "String",  "description": "SAP B1 Transaction ID (maps to source_system_id in FIP)" },
+      { "name": "ReferenceDate",         "type": "String",  "description": "Journal reference / document date (ISO 8601 YYYY-MM-DD)" },
+      { "name": "DueDate",               "type": "String",  "description": "Due date (for AR/AP journals)" },
+      { "name": "Memo",                  "type": "String",  "description": "Journal header memo" },
+      { "name": "TransactionCode",       "type": "String",  "description": "SAP transaction type code" },
+      { "name": "LineNum",               "type": "Int32",   "description": "Line number within the journal entry (from JournalEntryLines)" },
+      { "name": "AccountCode",           "type": "String",  "description": "G/L account code (maps to local_account_code in FIP)" },
+      { "name": "AccountName",           "type": "String",  "description": "G/L account description" },
+      { "name": "Debit",                 "type": "Decimal", "description": "Debit amount in system/local currency (HUF)" },
+      { "name": "Credit",                "type": "Decimal", "description": "Credit amount in system/local currency (HUF)" },
+      { "name": "DebitSys",              "type": "Decimal", "description": "Debit in system currency (HUF — same as Debit for HU entities)" },
+      { "name": "CreditSys",             "type": "Decimal", "description": "Credit in system currency (HUF)" },
+      { "name": "FCCurrency",            "type": "String",  "description": "Foreign currency code (ISO 4217; null for HUF-only postings)" },
+      { "name": "FCDebit",               "type": "Decimal", "description": "Debit in foreign currency (null if FCCurrency is null)" },
+      { "name": "FCCredit",              "type": "Decimal", "description": "Credit in foreign currency" },
+      { "name": "CostingCode",           "type": "String",  "description": "SAP cost centre code (maps to cost_centre_code in FIP; nullable)" },
+      { "name": "ProjectCode",           "type": "String",  "description": "SAP project code (maps to project_code in FIP; nullable)" },
+      { "name": "LineMemo",              "type": "String",  "description": "Line-level memo / narration" }
+    ],
+    "annotations": [
+      "erp", "sap", "sap-b1", "rest", "odata", "source", "gl", "bronze"
+    ]
+  }
+}

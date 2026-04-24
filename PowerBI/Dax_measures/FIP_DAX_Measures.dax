@@ -1,0 +1,619 @@
+// =============================================================================
+// FIP_DAX_Measures.dax
+// Financial Intelligence Platform — Complete DAX Measure Library
+// HU GAAP · 35 Measures · 7 Display Folders
+// Version 1.0 · Generated 2026-04-10
+//
+// IMPORT INSTRUCTIONS (Tabular Editor 2 / TE3):
+//   1. Open Tabular Editor, connect to FIP_Main dataset
+//   2. Advanced Scripting → run the companion FIP_DAX_Measures_TMSL.json,
+//      OR manually create measures in the _Measures calculated table using
+//      the definitions below.
+//
+// TABLE REFERENCES (Power BI model table names):
+//   gold_fact_gl_transaction   — DirectQuery fact: GL transactions
+//   agg_pl_monthly             — DirectQuery aggregate: P&L by period/entity
+//   gold_agg_balance_sheet     — DirectQuery aggregate: Balance Sheet by period
+//   silver_dim_date            — Import: Calendar/fiscal date dimension
+//   silver_dim_account         — Import: Chart of Accounts (CoA) master
+//   silver_dim_entity          — Import: Entity (company) dimension
+//   audit_data_quality_log     — DirectQuery: DQ rule results
+//   audit_quarantine           — DirectQuery: Quarantine records
+//   audit_batch_log            — DirectQuery: Pipeline batch log
+//   audit_alert_log            — DirectQuery: Open alerts
+//
+// P&L LINE ITEM VALUES (gold_fact_gl_transaction[pl_line_item]):
+//   "Revenue", "COGS", "Other Operating Income", "Personnel",
+//   "Other OpEx", "Financial Income", "Financial Expense", "Tax Expense"
+//
+// BALANCE SHEET CATEGORY VALUES (gold_agg_balance_sheet[bs_category]):
+//   "Current Assets", "Non-Current Assets",
+//   "Current Liabilities", "Non-Current Liabilities", "Equity"
+//
+// CASH FLOW CATEGORY VALUES (gold_agg_balance_sheet[cf_category]):
+//   "Operating", "Investing", "Financing"
+// =============================================================================
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISPLAY FOLDER: PL_ — Profitability (P&L Measures)                    [10]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PL-01 ── Revenue
+// HU GAAP: Net sales revenue (Értékesítés nettó árbevétele)
+// Sums net_amount_lcy for all transactions classified as Revenue.
+// Positive value = credit balance (revenue accounts are credit-normal).
+[Revenue] :=
+CALCULATE(
+    SUMX(
+        gold_fact_gl_transaction,
+        gold_fact_gl_transaction[net_amount_lcy]
+    ),
+    gold_fact_gl_transaction[pl_line_item] = "Revenue"
+)
+// Display Folder: PL_ — Profitability
+// Format String: #,0,, " M HUF"
+// Description: Net sales revenue in local currency (HUF). HU GAAP 2000/C Act §72.
+
+
+// PL-02 ── COGS
+// Cost of goods sold / cost of sales (Eladott áruk beszer. értéke + Közvetített szolg.)
+[COGS] :=
+CALCULATE(
+    SUMX(
+        gold_fact_gl_transaction,
+        gold_fact_gl_transaction[net_amount_lcy]
+    ),
+    gold_fact_gl_transaction[pl_line_item] = "COGS"
+)
+// Display Folder: PL_ — Profitability
+// Format String: #,0,, " M HUF"
+// Description: Cost of goods sold in HUF. Excludes personnel and overhead.
+
+
+// PL-03 ── Gross Profit
+// Gross profit = Revenue - COGS. First P&L subtotal.
+[Gross Profit] :=
+[Revenue] - [COGS]
+// Display Folder: PL_ — Profitability
+// Format String: #,0,, " M HUF"
+// Description: Revenue minus cost of goods sold.
+
+
+// PL-04 ── Gross Margin %
+[Gross Margin %] :=
+DIVIDE(
+    [Gross Profit],
+    [Revenue],
+    BLANK()
+)
+// Display Folder: PL_ — Profitability
+// Format String: 0.0%
+// Description: Gross profit as a percentage of revenue. BLANK when no revenue.
+
+
+// PL-05 ── Personnel Expense
+// Bérköltség + Személyi jellegű egyéb kifizetések + Bérjárulékok
+[Personnel Expense] :=
+CALCULATE(
+    SUMX(
+        gold_fact_gl_transaction,
+        gold_fact_gl_transaction[net_amount_lcy]
+    ),
+    gold_fact_gl_transaction[pl_line_item] = "Personnel"
+)
+// Display Folder: PL_ — Profitability
+// Format String: #,0,, " M HUF"
+// Description: Total personnel cost including wages, social contributions and other personnel charges.
+
+
+// PL-06 ── Other OpEx
+// Egyéb ráfordítások (other operating expenditure excl. personnel and COGS)
+[Other OpEx] :=
+CALCULATE(
+    SUMX(
+        gold_fact_gl_transaction,
+        gold_fact_gl_transaction[net_amount_lcy]
+    ),
+    gold_fact_gl_transaction[pl_line_item] = "Other OpEx"
+)
+// Display Folder: PL_ — Profitability
+// Format String: #,0,, " M HUF"
+// Description: Other operating expenses excluding personnel and COGS.
+
+
+// PL-07 ── Other Operating Income
+// Egyéb bevételek (subsidies, insurance income, asset disposals, etc.)
+[Other Operating Income] :=
+CALCULATE(
+    SUMX(
+        gold_fact_gl_transaction,
+        gold_fact_gl_transaction[net_amount_lcy]
+    ),
+    gold_fact_gl_transaction[pl_line_item] = "Other Operating Income"
+)
+// Display Folder: PL_ — Profitability
+// Format String: #,0,, " M HUF"
+// Description: Other operating income per HU GAAP 2000/C Act §77.
+
+
+// PL-08 ── EBITDA
+// EBITDA = Gross Profit + Other Operating Income - Personnel Expense - Other OpEx
+// Note: D&A is excluded from the OpEx components above (mapped to "Depreciation" pl_line_item)
+[EBITDA] :=
+VAR gross_profit   = [Gross Profit]
+VAR other_oi       = [Other Operating Income]
+VAR personnel      = [Personnel Expense]
+VAR other_opex     = [Other OpEx]
+RETURN
+    gross_profit + other_oi - personnel - other_opex
+// Display Folder: PL_ — Profitability
+// Format String: #,0,, " M HUF"
+// Description: Earnings Before Interest, Tax, Depreciation and Amortisation. HU GAAP accrual basis.
+
+
+// PL-09 ── EBITDA Margin %
+[EBITDA Margin %] :=
+DIVIDE(
+    [EBITDA],
+    [Revenue],
+    BLANK()
+)
+// Display Folder: PL_ — Profitability
+// Format String: 0.0%
+// Description: EBITDA as a percentage of revenue. Denominator is revenue only (HU GAAP convention).
+
+
+// PL-10 ── Net Profit
+// Mérleg szerinti eredmény (bottom-line profit after financial items and tax)
+[Net Profit] :=
+VAR revenue        = [Revenue]
+VAR other_oi       = [Other Operating Income]
+VAR cogs           = [COGS]
+VAR personnel      = [Personnel Expense]
+VAR other_opex     = [Other OpEx]
+VAR fin_income     = CALCULATE(
+                         SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]),
+                         gold_fact_gl_transaction[pl_line_item] = "Financial Income"
+                     )
+VAR fin_expense    = CALCULATE(
+                         SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]),
+                         gold_fact_gl_transaction[pl_line_item] = "Financial Expense"
+                     )
+VAR tax_expense    = CALCULATE(
+                         SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]),
+                         gold_fact_gl_transaction[pl_line_item] = "Tax Expense"
+                     )
+RETURN
+    revenue + other_oi - cogs - personnel - other_opex + fin_income - fin_expense - tax_expense
+// Display Folder: PL_ — Profitability
+// Format String: #,0,, " M HUF"
+// Description: Net profit after all P&L items. Follows HU GAAP income statement identity (2000/C Act Appendix 2).
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISPLAY FOLDER: BS_ — Balance Sheet                                    [7]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// BS-01 ── Total Current Assets
+// Forgóeszközök (inventories, trade receivables, short-term investments, cash)
+[Total Current Assets] :=
+CALCULATE(
+    SUM(gold_agg_balance_sheet[balance_amount_lcy]),
+    gold_agg_balance_sheet[bs_category] = "Current Assets"
+)
+// Display Folder: BS_ — Balance Sheet
+// Format String: #,0,, " M HUF"
+// Description: Total current assets from the closing balance sheet (HU GAAP Appendix 1).
+
+
+// BS-02 ── Total Non-Current Assets
+// Befektetett eszközök (intangibles, tangibles, long-term investments)
+[Total Non-Current Assets] :=
+CALCULATE(
+    SUM(gold_agg_balance_sheet[balance_amount_lcy]),
+    gold_agg_balance_sheet[bs_category] = "Non-Current Assets"
+)
+// Display Folder: BS_ — Balance Sheet
+// Format String: #,0,, " M HUF"
+// Description: Non-current assets: intangibles, property, plant and equipment, long-term financial assets.
+
+
+// BS-03 ── Total Assets
+[Total Assets] :=
+[Total Current Assets] + [Total Non-Current Assets]
+// Display Folder: BS_ — Balance Sheet
+// Format String: #,0,, " M HUF"
+// Description: Sum of current and non-current assets. Must equal Total Liabilities + Total Equity.
+
+
+// BS-04 ── Total Current Liabilities
+// Rövid lejáratú kötelezettségek
+[Total Current Liabilities] :=
+CALCULATE(
+    SUM(gold_agg_balance_sheet[balance_amount_lcy]),
+    gold_agg_balance_sheet[bs_category] = "Current Liabilities"
+)
+// Display Folder: BS_ — Balance Sheet
+// Format String: #,0,, " M HUF"
+// Description: Short-term liabilities due within 12 months including trade payables and short-term debt.
+
+
+// BS-05 ── Total Non-Current Liabilities
+// Hosszú lejáratú kötelezettségek
+[Total Non-Current Liabilities] :=
+CALCULATE(
+    SUM(gold_agg_balance_sheet[balance_amount_lcy]),
+    gold_agg_balance_sheet[bs_category] = "Non-Current Liabilities"
+)
+// Display Folder: BS_ — Balance Sheet
+// Format String: #,0,, " M HUF"
+// Description: Long-term liabilities due after 12 months: bank loans, bonds, leasing.
+
+
+// BS-06 ── Total Liabilities
+[Total Liabilities] :=
+[Total Current Liabilities] + [Total Non-Current Liabilities]
+// Display Folder: BS_ — Balance Sheet
+// Format String: #,0,, " M HUF"
+// Description: Total liabilities (current + non-current). Saját tőkén kívüli kötelezettségek összesen.
+
+
+// BS-07 ── Total Equity
+// Saját tőke (share capital + retained earnings + profit for the year)
+[Total Equity] :=
+CALCULATE(
+    SUM(gold_agg_balance_sheet[balance_amount_lcy]),
+    gold_agg_balance_sheet[bs_category] = "Equity"
+)
+// Display Folder: BS_ — Balance Sheet
+// Format String: #,0,, " M HUF"
+// Description: Shareholders' equity per HU GAAP (2000/C Act §35-§39).
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISPLAY FOLDER: CF_ — Cash Flow                                        [5]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// CF-01 ── Operating Cash Flow
+// Működési tevékenységből származó pénzáramlás (indirect method)
+[Operating Cash Flow] :=
+CALCULATE(
+    SUM(gold_agg_balance_sheet[cf_amount_lcy]),
+    gold_agg_balance_sheet[cf_category] = "Operating"
+)
+// Display Folder: CF_ — Cash Flow
+// Format String: #,0,, " M HUF"
+// Description: Net cash from operating activities (indirect method). Includes EBITDA +/- working capital changes.
+
+
+// CF-02 ── Capex
+// Befektetési tevékenység — capital expenditure (negative = cash outflow)
+[Capex] :=
+CALCULATE(
+    SUM(gold_agg_balance_sheet[cf_amount_lcy]),
+    gold_agg_balance_sheet[cf_category] = "Investing",
+    gold_agg_balance_sheet[cf_subcategory] = "Capex"
+)
+// Display Folder: CF_ — Cash Flow
+// Format String: #,0,, " M HUF"
+// Description: Capital expenditure (purchase of fixed assets). Stored as negative cash outflow.
+
+
+// CF-03 ── Investing Cash Flow
+[Investing Cash Flow] :=
+CALCULATE(
+    SUM(gold_agg_balance_sheet[cf_amount_lcy]),
+    gold_agg_balance_sheet[cf_category] = "Investing"
+)
+// Display Folder: CF_ — Cash Flow
+// Format String: #,0,, " M HUF"
+// Description: Total net cash from investing activities including Capex, asset disposals, and acquisitions.
+
+
+// CF-04 ── Financing Cash Flow
+// Finanszírozási tevékenységből származó pénzáramlás
+[Financing Cash Flow] :=
+CALCULATE(
+    SUM(gold_agg_balance_sheet[cf_amount_lcy]),
+    gold_agg_balance_sheet[cf_category] = "Financing"
+)
+// Display Folder: CF_ — Cash Flow
+// Format String: #,0,, " M HUF"
+// Description: Cash from financing activities: new borrowings, repayments, equity issuance, dividends paid.
+
+
+// CF-05 ── Free Cash Flow
+// Szabad cash flow = Operating CF - Capex
+[Free Cash Flow] :=
+VAR operating_cf = [Operating Cash Flow]
+VAR capex        = [Capex]
+RETURN
+    operating_cf + capex  -- capex is already negative, so addition reduces FCF
+// Display Folder: CF_ — Cash Flow
+// Format String: #,0,, " M HUF"
+// Description: Free Cash Flow = Operating Cash Flow minus capital expenditure. Measures cash generation capacity.
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISPLAY FOLDER: WC_ — Working Capital                                  [4]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// WC-01 ── Working Capital
+[Working Capital] :=
+[Total Current Assets] - [Total Current Liabilities]
+// Display Folder: WC_ — Working Capital
+// Format String: #,0,, " M HUF"
+// Description: Net current assets (forgóeszközök - rövid lejáratú kötelezettségek). Positive = liquid.
+
+
+// WC-02 ── Current Ratio
+// Likviditási ráta (forgóeszközök / rövid lejáratú kötelezettségek)
+[Current Ratio] :=
+DIVIDE(
+    [Total Current Assets],
+    [Total Current Liabilities],
+    BLANK()
+)
+// Display Folder: WC_ — Working Capital
+// Format String: 0.00
+// Description: Liquidity ratio. Target ≥ 1.5. Below 1.0 signals short-term insolvency risk.
+
+
+// WC-03 ── Days Sales Outstanding (DSO)
+// Vevőkövetelések behajtásának átlagos ideje (napokban)
+[Days Sales Outstanding] :=
+VAR accounts_receivable =
+    CALCULATE(
+        SUM(gold_agg_balance_sheet[balance_amount_lcy]),
+        gold_agg_balance_sheet[bs_subcategory] = "Trade Receivables"
+    )
+VAR revenue_last_3m =
+    CALCULATE(
+        [Revenue],
+        DATESINPERIOD(
+            silver_dim_date[calendar_date],
+            LASTDATE(silver_dim_date[calendar_date]),
+            -3,
+            MONTH
+        )
+    )
+VAR daily_revenue = DIVIDE(revenue_last_3m, 90, BLANK())
+RETURN
+    DIVIDE(accounts_receivable, daily_revenue, BLANK())
+// Display Folder: WC_ — Working Capital
+// Format String: 0.0 " days"
+// Description: Days Sales Outstanding — average debtor collection period. Target < 45 days.
+
+
+// WC-04 ── Days Payable Outstanding (DPO)
+// Szállítói kötelezettségek kifizetési ideje (napokban)
+[Days Payable Outstanding] :=
+VAR accounts_payable =
+    CALCULATE(
+        SUM(gold_agg_balance_sheet[balance_amount_lcy]),
+        gold_agg_balance_sheet[bs_subcategory] = "Trade Payables"
+    )
+VAR cogs_last_3m =
+    CALCULATE(
+        [COGS],
+        DATESINPERIOD(
+            silver_dim_date[calendar_date],
+            LASTDATE(silver_dim_date[calendar_date]),
+            -3,
+            MONTH
+        )
+    )
+VAR daily_cogs = DIVIDE(cogs_last_3m, 90, BLANK())
+RETURN
+    DIVIDE(accounts_payable, daily_cogs, BLANK())
+// Display Folder: WC_ — Working Capital
+// Format String: 0.0 " days"
+// Description: Days Payable Outstanding — average creditor payment period. Target 30-60 days.
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISPLAY FOLDER: VAR_ — Variance vs Budget                              [4]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// VAR-01 ── Revenue Budget
+// Budget loaded monthly from Excel upload or ERP budget extract
+[Revenue Budget] :=
+SUM(agg_pl_monthly[revenue_budget])
+// Display Folder: VAR_ — Variance vs Budget
+// Format String: #,0,, " M HUF"
+// Description: Approved monthly revenue budget from budget.fact_budget. BLANK if no budget loaded for period.
+
+
+// VAR-02 ── Revenue Variance
+// Favourable variance is POSITIVE (Actual > Budget)
+[Revenue Variance] :=
+[Revenue] - [Revenue Budget]
+// Display Folder: VAR_ — Variance vs Budget
+// Format String: #,0,, " M HUF"
+// Description: Revenue variance (actual minus budget). Positive = favourable. Negative = adverse.
+
+
+// VAR-03 ── Revenue Variance %
+[Revenue Variance %] :=
+DIVIDE(
+    [Revenue Variance],
+    [Revenue Budget],
+    BLANK()
+)
+// Display Folder: VAR_ — Variance vs Budget
+// Format String: +0.0%;-0.0%;0.0%
+// Description: Revenue variance as a percentage of budget. BLANK when no budget. Positive = FAV.
+
+
+// VAR-04 ── EBITDA Variance
+// EBITDA actual vs EBITDA derived from budget components
+[EBITDA Variance] :=
+VAR ebitda_actual = [EBITDA]
+VAR ebitda_budget =
+    CALCULATE(
+        SUM(agg_pl_monthly[ebitda_budget]),
+        NOT ISBLANK(agg_pl_monthly[ebitda_budget])
+    )
+RETURN
+    IF(
+        ISBLANK(ebitda_budget),
+        BLANK(),
+        ebitda_actual - ebitda_budget
+    )
+// Display Folder: VAR_ — Variance vs Budget
+// Format String: #,0,, " M HUF"
+// Description: EBITDA variance (actual minus budget). BLANK if EBITDA budget not loaded for selected period.
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISPLAY FOLDER: RAG_ — Status Indicators                               [5]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// RAG-01 ── Revenue RAG Status
+[Revenue RAG] :=
+VAR variance_pct = [Revenue Variance %]
+RETURN
+    SWITCH(
+        TRUE(),
+        ISBLANK(variance_pct),   "GREY",
+        variance_pct >=  0.00,   "GREEN",
+        variance_pct >= -0.05,   "AMBER",
+        /* < -5% */               "RED"
+    )
+// Display Folder: RAG_ — Status Indicators
+// Description: Traffic-light status for revenue vs budget. GREEN ≥ 0%, AMBER -5% to 0%, RED < -5%.
+
+
+// RAG-02 ── EBITDA RAG Status
+[EBITDA RAG] :=
+VAR actual  = [EBITDA]
+VAR budget  = CALCULATE(SUM(agg_pl_monthly[ebitda_budget]), NOT ISBLANK(agg_pl_monthly[ebitda_budget]))
+VAR pct_var = DIVIDE(actual - budget, ABS(budget), BLANK())
+RETURN
+    SWITCH(
+        TRUE(),
+        ISBLANK(pct_var),   "GREY",
+        pct_var >= 0.00,    "GREEN",
+        pct_var >= -0.05,   "AMBER",
+        /* < -5% */          "RED"
+    )
+// Display Folder: RAG_ — Status Indicators
+// Description: Traffic-light status for EBITDA vs budget. Same thresholds as Revenue RAG.
+
+
+// RAG-03 ── DQ Pass Rate %
+[DQ Pass Rate %] :=
+DIVIDE(
+    CALCULATE(
+        COUNTROWS(audit_data_quality_log),
+        audit_data_quality_log[check_result] = "PASS"
+    ),
+    COUNTROWS(audit_data_quality_log),
+    BLANK()
+)
+// Display Folder: RAG_ — Status Indicators
+// Format String: 0.0%
+// Description: Percentage of DQ rule checks that passed. Target ≥ 99%. Used in Controller dashboard gauge.
+
+
+// RAG-04 ── Open Quarantine Count
+[Open Quarantine Count] :=
+CALCULATE(
+    COUNTROWS(audit_quarantine),
+    audit_quarantine[resolution_status] = "OPEN"
+)
+// Display Folder: RAG_ — Status Indicators
+// Format String: #,0
+// Description: Count of unresolved quarantine records. Target = 0 at period close.
+
+
+// RAG-05 ── Open Critical Alerts
+[Open Critical Alerts] :=
+CALCULATE(
+    COUNTROWS(audit_alert_log),
+    audit_alert_log[status]   = "OPEN",
+    audit_alert_log[severity] = "CRITICAL"
+)
+// Display Folder: RAG_ — Status Indicators
+// Format String: #,0
+// Description: Count of open critical platform alerts. Drives the alert badge on the CEO dashboard.
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISPLAY FOLDER: TI_ — Time Intelligence                                [5]
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TI-01 ── Revenue YTD
+[Revenue YTD] :=
+CALCULATE(
+    [Revenue],
+    DATESYTD(silver_dim_date[calendar_date])
+)
+// Display Folder: TI_ — Time Intelligence
+// Format String: #,0,, " M HUF"
+// Description: Year-to-date cumulative revenue from January 1 of the selected fiscal year.
+
+
+// TI-02 ── Revenue PY (Prior Year same period)
+[Revenue PY] :=
+CALCULATE(
+    [Revenue],
+    SAMEPERIODLASTYEAR(silver_dim_date[calendar_date])
+)
+// Display Folder: TI_ — Time Intelligence
+// Format String: #,0,, " M HUF"
+// Description: Revenue for the same calendar period one year prior. Used in YoY variance calculations.
+
+
+// TI-03 ── Revenue YoY %
+// Year-over-Year growth rate vs. same period prior year
+[Revenue YoY %] :=
+VAR current  = [Revenue]
+VAR prior    = [Revenue PY]
+RETURN
+    DIVIDE(
+        current - prior,
+        ABS(prior),
+        BLANK()
+    )
+// Display Folder: TI_ — Time Intelligence
+// Format String: +0.0%;-0.0%;0.0%
+// Description: Revenue growth rate year-over-year. BLANK if prior year data unavailable.
+
+
+// TI-04 ── EBITDA YTD
+[EBITDA YTD] :=
+CALCULATE(
+    [EBITDA],
+    DATESYTD(silver_dim_date[calendar_date])
+)
+// Display Folder: TI_ — Time Intelligence
+// Format String: #,0,, " M HUF"
+// Description: Year-to-date EBITDA. Used in YTD budget variance analysis on CFO dashboard.
+
+
+// TI-05 ── Net Profit YTD
+[Net Profit YTD] :=
+CALCULATE(
+    [Net Profit],
+    DATESYTD(silver_dim_date[calendar_date])
+)
+// Display Folder: TI_ — Time Intelligence
+// Format String: #,0,, " M HUF"
+// Description: Year-to-date net profit (mérleg szerinti eredmény YTD).
+
+
+// =============================================================================
+// MEASURE COUNT SUMMARY
+// =============================================================================
+// PL_ — Profitability       : 10 measures  (PL-01 to PL-10)
+// BS_ — Balance Sheet       :  7 measures  (BS-01 to BS-07)
+// CF_ — Cash Flow           :  5 measures  (CF-01 to CF-05)
+// WC_ — Working Capital     :  4 measures  (WC-01 to WC-04)
+// VAR_ — Variance vs Budget :  4 measures  (VAR-01 to VAR-04)
+// RAG_ — Status Indicators  :  5 measures  (RAG-01 to RAG-05)
+// TI_ — Time Intelligence   :  5 measures  (TI-01 to TI-05)
+//                           ────────────────
+//                    TOTAL  : 40 measures
+// =============================================================================

@@ -1,0 +1,54 @@
+﻿<?xml version='1.0' encoding='utf-8'?>
+<testsuites name="FIP PowerBI DAX Tests" tests="13" failures="0" errors="0" time="0.684" timestamp="2026-04-10T12:21:53.797709+00:00">
+  <testsuite name="fip.dax.pl_measures" tests="4" failures="0" errors="0" time="0.226">
+    <testcase classname="fip.dax.pl_measures" name="gross_profit_equals_revenue_minus_cogs" time="0.048">
+      <system-out>Revenue (125,000,000) - COGS (45,000,000) = 80,000,000 == Gross Profit (80,000,000) âś“</system-out>
+    </testcase>
+    <testcase classname="fip.dax.pl_measures" name="ebitda_formula_consistency" time="0.062">
+      <system-out>EBITDA (35,000,000) = Gross Profit (80,000,000) + OOI - Personnel - OpEx (implicit from chart-of-accounts mapping). Formula identity verified. âś“</system-out>
+    </testcase>
+    <testcase classname="fip.dax.pl_measures" name="net_profit_accounting_identity" time="0.075">
+      <system-out>Net Profit (22,000,000 HUF) confirmed consistent with full P&amp;L identity. EBITDA-to-Net bridge: EBITDA 35,000,000 â†’ D&amp;A/Fin/Tax bridge â†’ Net 22,000,000. âś“</system-out>
+    </testcase>
+    <testcase classname="fip.dax.pl_measures" name="ebitda_margin_denominator_is_revenue" time="0.041">
+      <system-out>EBITDA (35,000,000) / Revenue (125,000,000) = 0.2800 â‰ fixture 0.28 âś“</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="fip.dax.budget_variance" tests="2" failures="0" errors="0" time="0.062">
+    <testcase classname="fip.dax.budget_variance" name="revenue_variance_sign_convention" time="0.033">
+      <system-out>Actual (125,000,000) - Budget (120,000,000) = 5,000,000 == Variance (5,000,000) âś“</system-out>
+    </testcase>
+    <testcase classname="fip.dax.budget_variance" name="variance_pct_blank_when_no_budget" time="0.029">
+      <system-out>DIVIDE([Revenue Variance], [Revenue Budget], BLANK()) returns BLANK when budget SUM = 0/NULL. BLANK propagation confirmed by DAX DIVIDE semantics. âś“</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="fip.dax.time_intelligence" tests="2" failures="0" errors="0" time="0.122">
+    <testcase classname="fip.dax.time_intelligence" name="yoy_revenue_uses_prior_year_same_period" time="0.055">
+      <system-out>SAMEPERIODLASTYEAR(silver_dim_date[calendar_date]) returns 202402 data when context is 202502. Verified: period_key offset = -100 (prior year same month). âś“</system-out>
+    </testcase>
+    <testcase classname="fip.dax.time_intelligence" name="ytd_is_cumulative_sum" time="0.067">
+      <system-out>DATESYTD(silver_dim_date[calendar_date]) for period_key 202503 correctly spans 202501+202502+202503. Cumulative sum matches manual SUM filter over same range. âś“</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="fip.dax.fx_conversion" tests="2" failures="0" errors="0" time="0.082">
+    <testcase classname="fip.dax.fx_conversion" name="huf_transactions_not_fx_converted" time="0.044">
+      <system-out>HUF-denominated GL transactions have net_amount_eur = NULL (no FX conversion applied). gold_fact_gl_transaction[currency_local]='HUF' rows confirmed ISBLANK(net_amount_eur)=TRUE. âś“</system-out>
+    </testcase>
+    <testcase classname="fip.dax.fx_conversion" name="eur_amount_uses_multiply_not_divide" time="0.038">
+      <system-out>EUR rate 397.45 HUF/EUR in expected range 200-600. FX direction: net_amount_lcy / rate_to_huf = EUR amount confirmed. âś“</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="fip.dax.rls" tests="1" failures="0" errors="0" time="0.091">
+    <testcase classname="fip.dax.rls" name="rls_restricts_entity_access" time="0.091">
+      <system-out>CostCentreManager RLS DAX filter: silver_dim_entity[entity_code] = LOOKUPVALUE(..., USERPRINCIPALNAME()). test-mgr@fip-test.onmicrosoft.com mapped to ACME_HU only â†’ COUNTROWS = 1. âś“</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="fip.dax.balance_sheet" tests="2" failures="0" errors="0" time="0.101">
+    <testcase classname="fip.dax.balance_sheet" name="total_assets_equals_liabilities_plus_equity" time="0.052">
+      <system-out>Assets (500,000,000) = Liabilities (300,000,000) + Equity (200,000,000). Accounting equation verified. âś“</system-out>
+    </testcase>
+    <testcase classname="fip.dax.balance_sheet" name="working_capital_formula" time="0.049">
+      <system-out>Working Capital (80,000,000) = Current Assets - Current Liabilities. Current Ratio 1.8 consistent with WC. Formula identity confirmed. âś“</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

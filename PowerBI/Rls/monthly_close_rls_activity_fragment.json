@@ -1,0 +1,37 @@
+{
+  "_purpose": "INSERT this activity into pl_monthly_close.json, after the 'Run dbt Gold models' activity and before 'Trigger Power BI refresh'. This ensures RLS membership is refreshed immediately after Gold data loads, before any users see the updated dataset.",
+  "_insert_after_activity": "Run dbt Gold models",
+  "_insert_before_activity": "Trigger Power BI Dataset Refresh",
+
+  "activity": {
+    "name": "Sync Power BI RLS from AAD",
+    "description": "Synchronise Power BI RLS role membership from AAD groups. Ensures that any org-chart changes made since the last sync are reflected before the refreshed dataset becomes available to users. Implements FINDING B-03 remediation.",
+    "type": "ExecutePipeline",
+    "dependsOn": [
+      {
+        "activity": "Run dbt Gold models",
+        "dependencyConditions": ["Succeeded"]
+      }
+    ],
+    "policy": {
+      "secureInput": false
+    },
+    "typeProperties": {
+      "pipeline": {
+        "referenceName": "pl_rls_sync",
+        "type": "PipelineReference"
+      },
+      "waitOnCompletion": true,
+      "parameters": {}
+    }
+  },
+
+  "_complete_monthly_close_sequence": [
+    "1. pl_erp_extract          → Extract from all ERP sources to Bronze",
+    "2. pl_dq_validation         → Run DQ-001 through DQ-011 checks, quarantine failures",
+    "3. pl_dbt_silver             → Transform Bronze → Silver (cleansed, SCD Type 2)",
+    "4. pl_dbt_gold               → Build Gold aggregates (agg_pl_monthly, agg_balance_sheet)",
+    "5. pl_rls_sync  ← NEW       → Sync AAD group members into Power BI RLS roles",
+    "6. Trigger Power BI refresh → Refresh FIP_Main dataset in FIP-Production workspace"
+  ]
+}

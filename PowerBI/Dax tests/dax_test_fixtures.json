@@ -1,0 +1,74 @@
+{
+  "_comment": "FIP DAX Test Fixtures — static expected values for offline unit testing of DAX measures. Values based on the seeded test dataset in the DEV workspace. Update after each test data refresh.",
+  "pl_measures": {
+    "period_key": 202501,
+    "entity_code": "ACME_HU",
+    "expected": {
+      "Revenue": 125000000,
+      "COGS": 45000000,
+      "Gross Profit": 80000000,
+      "Gross Margin %": 0.64,
+      "EBITDA": 35000000,
+      "EBITDA Margin %": 0.28,
+      "Net Profit": 22000000,
+      "Revenue Budget": 120000000,
+      "Revenue Variance": 5000000,
+      "Revenue Variance %": 0.0417
+    }
+  },
+  "balance_sheet": {
+    "period_key": 202501,
+    "entity_code": "ACME_HU",
+    "expected": {
+      "Total Assets": 500000000,
+      "Total Liabilities": 300000000,
+      "Total Equity": 200000000,
+      "Working Capital": 80000000,
+      "Current Ratio": 1.8,
+      "Debt to Equity": 1.5
+    }
+  },
+  "fx_rates": {
+    "_note": "NBH closing rates used for 2025-01-31",
+    "EUR": {
+      "rate_to_huf": 397.45,
+      "direction": "divide"
+    },
+    "USD": {
+      "rate_to_huf": 361.2,
+      "direction": "divide"
+    },
+    "CHF": {
+      "rate_to_huf": 400.1,
+      "direction": "divide"
+    },
+    "_direction_example": "800 HUF / 400.0 rate_to_huf = 2.00 EUR (divide, not multiply)"
+  },
+  "rls": {
+    "test_users": [
+      {
+        "aad_email": "test-cfo@fip-test.onmicrosoft.com",
+        "role": "CFO",
+        "entities": [
+          "ACME_HU",
+          "BETA_HU"
+        ]
+      },
+      {
+        "aad_email": "test-ccmgr@fip-test.onmicrosoft.com",
+        "role": "CostCentreManager",
+        "entities": [
+          "ACME_HU"
+        ]
+      },
+      {
+        "aad_email": "test-read@fip-test.onmicrosoft.com",
+        "role": "ReadOnly",
+        "entities": [
+          "ACME_HU"
+        ]
+      }
+    ],
+    "_note": "Canonical RLS roles: CEO,CFO,Controller,CostCentreManager,Auditor."
+  }
+}

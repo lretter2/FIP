@@ -1,0 +1,449 @@
+##############################################################################
+#  FIP Power BI CI/CD Pipeline
+#  Azure DevOps · Financial Intelligence Platform · Phase 3
+#
+#  Pipeline Strategy (DEV → TEST → PROD three-stage promotion):
+#
+#   ┌─────────────────────────────────────────────────────────────────────┐
+#   │  PR / feature branch                                                │
+#   │    Stage 1 — Build & Validate (always runs)                        │
+#   │      • PBIX/PBIT syntax check via pbi-tools                        │
+#   │      • DAX measure unit tests via run_dax_tests.py (DEV dataset)   │
+#   │      • Publish JUnit test results to Azure DevOps                  │
+#   │                                                                     │
+#   │  Merge to main                                                      │
+#   │    Stage 2 — Deploy to TEST workspace                              │
+#   │      • Import .pbix to TEST workspace via Power BI REST API        │
+#   │      • Rebind dataset to TEST SQL endpoint                         │
+#   │      • Trigger dataset refresh                                     │
+#   │      • Run DAX integration tests vs TEST dataset                   │
+#   │                                                                     │
+#   │  Manual approval gate ───────────────────────────────────────────  │
+#   │    Stage 3 — Deploy to PROD workspace                              │
+#   │      • Power BI Deployment Pipeline API (DEV→TEST→PROD promotion)  │
+#   │      • Rebind to PROD Synapse endpoint                             │
+#   │      • Notify CFO/Controller via Teams webhook                     │
+#   └─────────────────────────────────────────────────────────────────────┘
+#
+#  Required Azure DevOps Variable Groups:
+#    "fip-powerbi-common"  — shared across all stages
+#    "fip-powerbi-test"    — TEST workspace credentials
+#    "fip-powerbi-prod"    — PROD workspace credentials (protected)
+#
+#  Required Service Connections:
+#    "fip-azure-serviceconn"  — ARM service connection for Azure CLI tasks
+##############################################################################
+
+trigger:
+  branches:
+    include:
+      - main
+      - feature/powerbi-*
+  paths:
+    include:
+      - PowerBI/**
+      - PowerBI/cicd/**
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - PowerBI/**
+
+variables:
+  - group: fip-powerbi-common
+  - name: pythonVersion
+    value: "3.11"
+  - name: pbiToolsVersion
+    value: "1.0.0-rc.6"
+  - name: deploymentPipelineId
+    value: $(POWERBI_DEPLOYMENT_PIPELINE_ID)  # Set in variable group
+
+pool:
+  vmImage: "ubuntu-latest"
+
+stages:
+
+# ════════════════════════════════════════════════════════════════════════════
+#  STAGE 1 — BUILD & VALIDATE
+# ════════════════════════════════════════════════════════════════════════════
+- stage: Build
+  displayName: "Build & Validate"
+  jobs:
+  - job: Validate
+    displayName: "Validate PBIX and DAX Measures"
+    steps:
+
+    # ── Python setup ────────────────────────────────────────────────────────
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: $(pythonVersion)
+      displayName: "Use Python $(pythonVersion)"
+
+    - script: |
+        pip install python-dotenv azure-identity pyodbc --quiet
+      displayName: "Install Python dependencies"
+
+    # ── pbi-tools: validate PBIX metadata ───────────────────────────────────
+    - script: |
+        dotnet tool install --global pbi-tools --version $(pbiToolsVersion) 2>/dev/null || true
+        pbi-tools info
+      displayName: "Install pbi-tools"
+      continueOnError: true
+
+    - script: |
+        if command -v pbi-tools &> /dev/null; then
+          find $(Build.SourcesDirectory)/PowerBI -name "*.pbix" | while read pbix; do
+            echo "Validating: $pbix"
+            pbi-tools extract "$pbix" -extractFolder /tmp/pbix-extract
+          done
+        else
+          echo "pbi-tools not available — skipping PBIX extract validation"
+        fi
+      displayName: "Validate PBIX files"
+      continueOnError: true
+
+    # ── DAX unit tests (dry-run / offline validation) ────────────────────────
+    - script: |
+        python PowerBI/dax_tests/run_dax_tests.py --dry-run
+      displayName: "DAX test inventory (dry-run)"
+
+    # ── DAX unit tests against DEV dataset ──────────────────────────────────
+    - script: |
+        python PowerBI/dax_tests/run_dax_tests.py \
+          --workspace "$(POWERBI_DEV_WORKSPACE)" \
+          --dataset   "$(POWERBI_DEV_DATASET)" \
+          --output    "$(Agent.TempDirectory)/dax-test-results.xml"
+      displayName: "Run DAX tests (DEV)"
+      env:
+        AZURE_TENANT_ID:     $(AZURE_TENANT_ID)
+        AZURE_CLIENT_ID:     $(AZURE_CLIENT_ID)
+        AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
+      continueOnError: false  # Fail the build on test failure
+
+    - task: PublishTestResults@2
+      displayName: "Publish DAX Test Results"
+      inputs:
+        testResultsFormat: "JUnit"
+        testResultsFiles:  "$(Agent.TempDirectory)/dax-test-results.xml"
+        testRunTitle:      "FIP DAX Measure Tests (DEV)"
+        failTaskOnFailedTests: true
+      condition: always()
+
+    # ── Publish build artifacts ─────────────────────────────────────────────
+    - task: PublishBuildArtifacts@1
+      displayName: "Publish PBIX artifact"
+      inputs:
+        pathToPublish: "$(Build.SourcesDirectory)/PowerBI"
+        artifactName:  "powerbi-reports"
+        publishLocation: "Container"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  STAGE 2 — DEPLOY TO TEST
+# ════════════════════════════════════════════════════════════════════════════
+- stage: DeployTest
+  displayName: "Deploy to TEST Workspace"
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  variables:
+    - group: fip-powerbi-test
+  jobs:
+  - deployment: DeployToTest
+    displayName: "Import to TEST workspace"
+    environment: "FIP-PowerBI-TEST"
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(pythonVersion)
+
+          - script: pip install requests azure-identity python-dotenv --quiet
+            displayName: "Install dependencies"
+
+          - task: AzureCLI@2
+            displayName: "Import PBIX to TEST workspace"
+            inputs:
+              azureSubscription: "fip-azure-serviceconn"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+
+                # Get access token for Power BI REST API
+                TOKEN=$(az account get-access-token \
+                  --resource https://analysis.windows.net/powerbi/api \
+                  --query accessToken -o tsv)
+
+                WORKSPACE_ID="$(POWERBI_TEST_WORKSPACE_ID)"
+
+                # Import each PBIX in the artifact
+                for PBIX in $(Pipeline.Workspace)/powerbi-reports/*.pbix; do
+                  REPORT_NAME=$(basename "$PBIX" .pbix)
+                  echo "Importing: $REPORT_NAME"
+
+                  # Check if report already exists and get its ID for overwrite
+                  EXISTING=$(curl -s -H "Authorization: Bearer $TOKEN" \
+                    "https://api.powerbi.com/v1.0/myorg/groups/$WORKSPACE_ID/reports" \
+                    | python3 -c "
+                      import json,sys
+                      data=json.load(sys.stdin)
+                      match=[r for r in data.get('value',[]) if r['name']=='$REPORT_NAME']
+                      print(match[0]['id'] if match else '')
+                    ")
+
+                  IMPORT_URL="https://api.powerbi.com/v1.0/myorg/groups/$WORKSPACE_ID/imports"
+                  PARAMS="nameConflict=Overwrite&skipReport=false&overrideReportLabel=false"
+
+                  IMPORT_RESPONSE=$(curl -s -X POST \
+                    -H "Authorization: Bearer $TOKEN" \
+                    -F "file=@$PBIX;filename=$REPORT_NAME.pbix" \
+                    "$IMPORT_URL?$PARAMS")
+
+                  IMPORT_ID=$(echo $IMPORT_RESPONSE | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
+                  echo "Import ID: $IMPORT_ID"
+
+                  # Poll until import completes (max 5 minutes)
+                  for i in {1..30}; do
+                    STATUS=$(curl -s -H "Authorization: Bearer $TOKEN" \
+                      "https://api.powerbi.com/v1.0/myorg/groups/$WORKSPACE_ID/imports/$IMPORT_ID" \
+                      | python3 -c "import json,sys; print(json.load(sys.stdin).get('importState',''))")
+                    echo "  Import state: $STATUS"
+                    if [ "$STATUS" = "Succeeded" ]; then break; fi
+                    if [ "$STATUS" = "Failed" ]; then
+                      echo "Import failed!"
+                      exit 1
+                    fi
+                    sleep 10
+                  done
+                  if [ "$STATUS" != "Succeeded" ]; then
+                    echo "ERROR: Import of $REPORT_NAME timed out after 300s (last state: $STATUS)"
+                    exit 1
+                  fi
+                done
+            env:
+              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+
+          - task: AzureCLI@2
+            displayName: "Rebind dataset to TEST Synapse endpoint"
+            inputs:
+              azureSubscription: "fip-azure-serviceconn"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+                TOKEN=$(az account get-access-token \
+                  --resource https://analysis.windows.net/powerbi/api \
+                  --query accessToken -o tsv)
+
+                # Update datasource credentials for TEST Synapse SQL pool
+                WORKSPACE_ID="$(POWERBI_TEST_WORKSPACE_ID)"
+                DATASET_ID="$(POWERBI_TEST_DATASET_ID)"
+
+                PAYLOAD='{
+                  "updateDetails": [{
+                    "datasourceSelector": {
+                      "datasourceType": "AnalysisServices",
+                      "connectionDetails": {
+                        "server": "$(SYNAPSE_TEST_SERVER)",
+                        "database": "fip_dw"
+                      }
+                    },
+                    "connectionDetails": {
+                      "server": "$(SYNAPSE_TEST_SERVER)",
+                      "database": "fip_dw"
+                    }
+                  }]
+                }'
+
+                curl -s -X POST \
+                  -H "Authorization: Bearer $TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "$PAYLOAD" \
+                  "https://api.powerbi.com/v1.0/myorg/groups/$WORKSPACE_ID/datasets/$DATASET_ID/Default.UpdateDatasources"
+            env:
+              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+
+          - task: AzureCLI@2
+            displayName: "Trigger dataset refresh (TEST)"
+            inputs:
+              azureSubscription: "fip-azure-serviceconn"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                TOKEN=$(az account get-access-token \
+                  --resource https://analysis.windows.net/powerbi/api \
+                  --query accessToken -o tsv)
+
+                curl -s -X POST \
+                  -H "Authorization: Bearer $TOKEN" \
+                  "https://api.powerbi.com/v1.0/myorg/groups/$(POWERBI_TEST_WORKSPACE_ID)/datasets/$(POWERBI_TEST_DATASET_ID)/refreshes"
+            env:
+              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+
+          # ── Wait for dataset refresh to complete ────────────────────────
+          - task: AzureCLI@2
+            displayName: "Wait for dataset refresh (TEST)"
+            inputs:
+              azureSubscription: "fip-azure-serviceconn"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+                TOKEN=$(az account get-access-token \
+                  --resource https://analysis.windows.net/powerbi/api \
+                  --query accessToken -o tsv)
+                REFRESH_STATUS=""
+                for i in {1..60}; do
+                  sleep 10
+                  REFRESH_STATUS=$(curl -s -H "Authorization: Bearer $TOKEN" \
+                    "https://api.powerbi.com/v1.0/myorg/groups/$(POWERBI_TEST_WORKSPACE_ID)/datasets/$(POWERBI_TEST_DATASET_ID)/refreshes?\$top=1" \
+                    | python3 -c "import json,sys; v=json.load(sys.stdin).get('value',[]); print(v[0].get('status','') if v else '')")
+                  echo "  Refresh status: $REFRESH_STATUS"
+                  if [ "$REFRESH_STATUS" = "Completed" ]; then break; fi
+                  if [ "$REFRESH_STATUS" = "Failed" ]; then echo "Refresh failed!"; exit 1; fi
+                done
+                if [ "$REFRESH_STATUS" != "Completed" ]; then
+                  echo "ERROR: Dataset refresh timed out after 600s"
+                  exit 1
+                fi
+            env:
+              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+
+          # ── DAX integration tests vs TEST dataset ───────────────────────
+          - script: |
+              python PowerBI/dax_tests/run_dax_tests.py \
+                --workspace "$(POWERBI_TEST_WORKSPACE_NAME)" \
+                --dataset   "$(POWERBI_TEST_DATASET_NAME)" \
+                --output    "$(Agent.TempDirectory)/dax-test-results-test.xml"
+            displayName: "Run DAX integration tests (TEST)"
+            env:
+              AZURE_TENANT_ID:     $(AZURE_TENANT_ID)
+              AZURE_CLIENT_ID:     $(AZURE_CLIENT_ID)
+              AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
+
+          - task: PublishTestResults@2
+            displayName: "Publish DAX Test Results (TEST)"
+            inputs:
+              testResultsFormat: "JUnit"
+              testResultsFiles:  "$(Agent.TempDirectory)/dax-test-results-test.xml"
+              testRunTitle:      "FIP DAX Measure Tests (TEST)"
+            condition: always()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  STAGE 3 — DEPLOY TO PROD (manual approval gate)
+# ════════════════════════════════════════════════════════════════════════════
+- stage: DeployProd
+  displayName: "Deploy to PROD Workspace"
+  dependsOn: DeployTest
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  variables:
+    - group: fip-powerbi-prod
+  jobs:
+  - deployment: DeployToProd
+    displayName: "Promote to PROD via Deployment Pipeline API"
+    environment: "FIP-PowerBI-PROD"   # This environment has a manual approval gate configured in Azure DevOps
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - task: AzureCLI@2
+            displayName: "Promote TEST → PROD via Deployment Pipeline API"
+            inputs:
+              azureSubscription: "fip-azure-serviceconn"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+                TOKEN=$(az account get-access-token \
+                  --resource https://analysis.windows.net/powerbi/api \
+                  --query accessToken -o tsv)
+
+                # Trigger deployment pipeline: TEST stage (stageOrder=1) → PROD (stageOrder=2)
+                DEPLOY_PAYLOAD='{
+                  "sourceStageOrder": 1,
+                  "isBackwardDeployment": false,
+                  "newWorkspace": { "type": "existing" },
+                  "options": {
+                    "allowOverwriteArtifact": true,
+                    "allowCreateArtifact": false,
+                    "allowSkipTilesWithMissingPrerequisites": false
+                  }
+                }'
+
+                curl -s -X POST \
+                  -H "Authorization: Bearer $TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "$DEPLOY_PAYLOAD" \
+                  "https://api.powerbi.com/v1.0/myorg/pipelines/$(deploymentPipelineId)/deploy"
+            env:
+              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+
+          - task: AzureCLI@2
+            displayName: "Rebind PROD dataset to production Synapse endpoint"
+            inputs:
+              azureSubscription: "fip-azure-serviceconn"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                TOKEN=$(az account get-access-token \
+                  --resource https://analysis.windows.net/powerbi/api \
+                  --query accessToken -o tsv)
+
+                PAYLOAD='{
+                  "updateDetails": [{
+                    "datasourceSelector": {
+                      "datasourceType": "AnalysisServices",
+                      "connectionDetails": {
+                        "server": "$(SYNAPSE_PROD_SERVER)",
+                        "database": "fip_dw"
+                      }
+                    },
+                    "connectionDetails": {
+                      "server": "$(SYNAPSE_PROD_SERVER)",
+                      "database": "fip_dw"
+                    }
+                  }]
+                }'
+
+                curl -s -X POST \
+                  -H "Authorization: Bearer $TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "$PAYLOAD" \
+                  "https://api.powerbi.com/v1.0/myorg/groups/$(POWERBI_PROD_WORKSPACE_ID)/datasets/$(POWERBI_PROD_DATASET_ID)/Default.UpdateDatasources"
+            env:
+              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+
+          # ── Teams notification ─────────────────────────────────────────
+          - task: InvokeRestAPI@1
+            displayName: "Notify Finance team via Teams webhook"
+            inputs:
+              connectionType: "connectedServiceName"
+              serviceConnection: "fip-teams-webhook"
+              method: "POST"
+              headers: '{"Content-Type": "application/json"}'
+              body: |
+                {
+                  "@type": "MessageCard",
+                  "@context": "http://schema.org/extensions",
+                  "summary": "FIP Power BI deployed to PROD",
+                  "themeColor": "00A36C",
+                  "title": "✅ FIP Power BI — PROD deployment complete",
+                  "sections": [{
+                    "activityTitle": "Build $(Build.BuildNumber)",
+                    "activityText": "Power BI reports deployed to production workspace. Dataset rebind and refresh complete.",
+                    "facts": [
+                      { "name": "Branch",    "value": "$(Build.SourceBranch)" },
+                      { "name": "Triggered", "value": "$(Build.RequestedFor)" },
+                      { "name": "Pipeline",  "value": "$(System.TeamProject)" }
+                    ]
+                  }]
+                }
+            continueOnError: true

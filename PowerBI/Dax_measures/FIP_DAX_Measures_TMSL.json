@@ -1,0 +1,360 @@
+{
+  "_description": "TMSL (Tabular Model Scripting Language) script to deploy all 40 FIP DAX measures to the FIP_Main dataset via the Power BI Premium XMLA endpoint. Execute via deploy_xmla.py or paste into SQL Server Management Studio connected to the XMLA endpoint.",
+  "_version": "1.0",
+  "_generated": "2026-04-10",
+  "_usage": "python PowerBI/cicd/deploy_xmla.py --stage dev --tmsl PowerBI/dax_measures/FIP_DAX_Measures_TMSL.json",
+
+  "createOrReplace": {
+    "object": {
+      "database": "FIP_Main",
+      "table": "_Measures"
+    },
+    "table": {
+      "name": "_Measures",
+      "isHidden": false,
+      "description": "Calculated table containing all FIP DAX measures. Not a data table — all measures reference gold/silver fact and dimension tables via CALCULATE and filter context.",
+      "columns": [
+        {
+          "name": "_placeholder",
+          "dataType": "int64",
+          "isHidden": true,
+          "sourceColumn": "[_placeholder]",
+          "summarizeBy": "none"
+        }
+      ],
+      "partitions": [
+        {
+          "name": "_Measures-partition",
+          "mode": "import",
+          "source": {
+            "type": "calculated",
+            "expression": "ROW(\"_placeholder\", BLANK())"
+          }
+        }
+      ],
+      "measures": [
+
+        {
+          "name": "Revenue",
+          "description": "Net sales revenue in local currency (HUF). HU GAAP 2000/C Act §72.",
+          "expression": "CALCULATE(\n    SUMX(\n        gold_fact_gl_transaction,\n        gold_fact_gl_transaction[net_amount_lcy]\n    ),\n    gold_fact_gl_transaction[pl_line_item] = \"Revenue\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "COGS",
+          "description": "Cost of goods sold / cost of sales (Eladott áruk beszerzési értéke).",
+          "expression": "CALCULATE(\n    SUMX(\n        gold_fact_gl_transaction,\n        gold_fact_gl_transaction[net_amount_lcy]\n    ),\n    gold_fact_gl_transaction[pl_line_item] = \"COGS\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "Gross Profit",
+          "description": "Revenue minus cost of goods sold.",
+          "expression": "[Revenue] - [COGS]",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "Gross Margin %",
+          "description": "Gross profit as a percentage of revenue. BLANK when no revenue.",
+          "expression": "DIVIDE(\n    [Gross Profit],\n    [Revenue],\n    BLANK()\n)",
+          "formatString": "0.0%",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "Personnel Expense",
+          "description": "Total personnel cost including wages, social contributions and other charges.",
+          "expression": "CALCULATE(\n    SUMX(\n        gold_fact_gl_transaction,\n        gold_fact_gl_transaction[net_amount_lcy]\n    ),\n    gold_fact_gl_transaction[pl_line_item] = \"Personnel\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "Other OpEx",
+          "description": "Other operating expenses excluding personnel and COGS.",
+          "expression": "CALCULATE(\n    SUMX(\n        gold_fact_gl_transaction,\n        gold_fact_gl_transaction[net_amount_lcy]\n    ),\n    gold_fact_gl_transaction[pl_line_item] = \"Other OpEx\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "Other Operating Income",
+          "description": "Other operating income per HU GAAP 2000/C Act §77 (subsidies, insurance proceeds, etc.).",
+          "expression": "CALCULATE(\n    SUMX(\n        gold_fact_gl_transaction,\n        gold_fact_gl_transaction[net_amount_lcy]\n    ),\n    gold_fact_gl_transaction[pl_line_item] = \"Other Operating Income\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "EBITDA",
+          "description": "Earnings Before Interest, Tax, Depreciation and Amortisation. HU GAAP accrual basis.",
+          "expression": "VAR gross_profit = [Gross Profit]\nVAR other_oi     = [Other Operating Income]\nVAR personnel    = [Personnel Expense]\nVAR other_opex   = [Other OpEx]\nRETURN\n    gross_profit + other_oi - personnel - other_opex",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "EBITDA Margin %",
+          "description": "EBITDA as a percentage of revenue. Denominator is revenue only (HU GAAP convention).",
+          "expression": "DIVIDE(\n    [EBITDA],\n    [Revenue],\n    BLANK()\n)",
+          "formatString": "0.0%",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "Net Profit",
+          "description": "Net profit after all P&L items (Mérleg szerinti eredmény). Follows HU GAAP income statement identity (2000/C Act Appendix 2).",
+          "expression": "VAR revenue     = [Revenue]\nVAR other_oi    = [Other Operating Income]\nVAR cogs        = [COGS]\nVAR personnel   = [Personnel Expense]\nVAR other_opex  = [Other OpEx]\nVAR fin_income  = CALCULATE(\n                      SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]),\n                      gold_fact_gl_transaction[pl_line_item] = \"Financial Income\"\n                  )\nVAR fin_expense = CALCULATE(\n                      SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]),\n                      gold_fact_gl_transaction[pl_line_item] = \"Financial Expense\"\n                  )\nVAR tax_expense = CALCULATE(\n                      SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]),\n                      gold_fact_gl_transaction[pl_line_item] = \"Tax Expense\"\n                  )\nRETURN\n    revenue + other_oi - cogs - personnel - other_opex + fin_income - fin_expense - tax_expense",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "PL_ — Profitability"
+        },
+
+        {
+          "name": "Total Current Assets",
+          "description": "Forgóeszközök total — inventories, trade receivables, short-term investments, cash.",
+          "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[balance_amount_lcy]),\n    gold_agg_balance_sheet[bs_category] = \"Current Assets\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "BS_ — Balance Sheet"
+        },
+
+        {
+          "name": "Total Non-Current Assets",
+          "description": "Befektetett eszközök — intangibles, property, plant and equipment, long-term financial assets.",
+          "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[balance_amount_lcy]),\n    gold_agg_balance_sheet[bs_category] = \"Non-Current Assets\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "BS_ — Balance Sheet"
+        },
+
+        {
+          "name": "Total Assets",
+          "description": "Sum of current and non-current assets. Must equal Total Liabilities + Total Equity.",
+          "expression": "[Total Current Assets] + [Total Non-Current Assets]",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "BS_ — Balance Sheet"
+        },
+
+        {
+          "name": "Total Current Liabilities",
+          "description": "Rövid lejáratú kötelezettségek — short-term liabilities due within 12 months.",
+          "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[balance_amount_lcy]),\n    gold_agg_balance_sheet[bs_category] = \"Current Liabilities\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "BS_ — Balance Sheet"
+        },
+
+        {
+          "name": "Total Non-Current Liabilities",
+          "description": "Hosszú lejáratú kötelezettségek — bank loans, bonds, long-term leasing obligations.",
+          "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[balance_amount_lcy]),\n    gold_agg_balance_sheet[bs_category] = \"Non-Current Liabilities\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "BS_ — Balance Sheet"
+        },
+
+        {
+          "name": "Total Liabilities",
+          "description": "Total liabilities (current + non-current).",
+          "expression": "[Total Current Liabilities] + [Total Non-Current Liabilities]",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "BS_ — Balance Sheet"
+        },
+
+        {
+          "name": "Total Equity",
+          "description": "Shareholders' equity (Saját tőke) per HU GAAP 2000/C Act §35-§39.",
+          "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[balance_amount_lcy]),\n    gold_agg_balance_sheet[bs_category] = \"Equity\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "BS_ — Balance Sheet"
+        },
+
+        {
+          "name": "Operating Cash Flow",
+          "description": "Net cash from operating activities (indirect method). Includes EBITDA ± working capital changes.",
+          "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[cf_amount_lcy]),\n    gold_agg_balance_sheet[cf_category] = \"Operating\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "CF_ — Cash Flow"
+        },
+
+        {
+          "name": "Capex",
+          "description": "Capital expenditure — purchase of fixed assets. Stored as negative cash outflow.",
+          "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[cf_amount_lcy]),\n    gold_agg_balance_sheet[cf_category] = \"Investing\",\n    gold_agg_balance_sheet[cf_subcategory] = \"Capex\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "CF_ — Cash Flow"
+        },
+
+        {
+          "name": "Investing Cash Flow",
+          "description": "Total net cash from investing activities including Capex, asset disposals, and acquisitions.",
+          "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[cf_amount_lcy]),\n    gold_agg_balance_sheet[cf_category] = \"Investing\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "CF_ — Cash Flow"
+        },
+
+        {
+          "name": "Financing Cash Flow",
+          "description": "Cash from financing activities: borrowings, repayments, equity issuance, dividends paid.",
+          "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[cf_amount_lcy]),\n    gold_agg_balance_sheet[cf_category] = \"Financing\"\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "CF_ — Cash Flow"
+        },
+
+        {
+          "name": "Free Cash Flow",
+          "description": "Free Cash Flow = Operating Cash Flow − Capex. Measures cash generation capacity.",
+          "expression": "VAR operating_cf = [Operating Cash Flow]\nVAR capex        = [Capex]\nRETURN\n    operating_cf + capex",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "CF_ — Cash Flow"
+        },
+
+        {
+          "name": "Working Capital",
+          "description": "Net current assets (Forgóeszközök − Rövid lejáratú kötelezettségek). Positive = liquid.",
+          "expression": "[Total Current Assets] - [Total Current Liabilities]",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "WC_ — Working Capital"
+        },
+
+        {
+          "name": "Current Ratio",
+          "description": "Liquidity ratio (Likviditási mutató). Target ≥ 1.5. Below 1.0 signals insolvency risk.",
+          "expression": "DIVIDE(\n    [Total Current Assets],\n    [Total Current Liabilities],\n    BLANK()\n)",
+          "formatString": "0.00",
+          "displayFolder": "WC_ — Working Capital"
+        },
+
+        {
+          "name": "Days Sales Outstanding",
+          "description": "Average debtor collection period in days (Vevőkövetelések behajtási ideje). Target < 45 days.",
+          "expression": "VAR accounts_receivable =\n    CALCULATE(\n        SUM(gold_agg_balance_sheet[balance_amount_lcy]),\n        gold_agg_balance_sheet[bs_subcategory] = \"Trade Receivables\"\n    )\nVAR revenue_last_3m =\n    CALCULATE(\n        [Revenue],\n        DATESINPERIOD(\n            silver_dim_date[calendar_date],\n            LASTDATE(silver_dim_date[calendar_date]),\n            -3,\n            MONTH\n        )\n    )\nVAR daily_revenue = DIVIDE(revenue_last_3m, 90, BLANK())\nRETURN\n    DIVIDE(accounts_receivable, daily_revenue, BLANK())",
+          "formatString": "0.0 \"days\"",
+          "displayFolder": "WC_ — Working Capital"
+        },
+
+        {
+          "name": "Days Payable Outstanding",
+          "description": "Average creditor payment period in days (Szállítói fizetési idő). Target 30-60 days.",
+          "expression": "VAR accounts_payable =\n    CALCULATE(\n        SUM(gold_agg_balance_sheet[balance_amount_lcy]),\n        gold_agg_balance_sheet[bs_subcategory] = \"Trade Payables\"\n    )\nVAR cogs_last_3m =\n    CALCULATE(\n        [COGS],\n        DATESINPERIOD(\n            silver_dim_date[calendar_date],\n            LASTDATE(silver_dim_date[calendar_date]),\n            -3,\n            MONTH\n        )\n    )\nVAR daily_cogs = DIVIDE(cogs_last_3m, 90, BLANK())\nRETURN\n    DIVIDE(accounts_payable, daily_cogs, BLANK())",
+          "formatString": "0.0 \"days\"",
+          "displayFolder": "WC_ — Working Capital"
+        },
+
+        {
+          "name": "Revenue Budget",
+          "description": "Approved monthly revenue budget from budget.fact_budget. BLANK if no budget loaded for period.",
+          "expression": "SUM(agg_pl_monthly[revenue_budget])",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "VAR_ — Variance vs Budget"
+        },
+
+        {
+          "name": "Revenue Variance",
+          "description": "Revenue variance (actual minus budget). Positive = favourable. Negative = adverse.",
+          "expression": "[Revenue] - [Revenue Budget]",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "VAR_ — Variance vs Budget"
+        },
+
+        {
+          "name": "Revenue Variance %",
+          "description": "Revenue variance as a percentage of budget. BLANK when no budget. Positive = favourable.",
+          "expression": "DIVIDE(\n    [Revenue Variance],\n    [Revenue Budget],\n    BLANK()\n)",
+          "formatString": "+0.0%;-0.0%;0.0%",
+          "displayFolder": "VAR_ — Variance vs Budget"
+        },
+
+        {
+          "name": "EBITDA Variance",
+          "description": "EBITDA variance (actual minus budget). BLANK if EBITDA budget not loaded for selected period.",
+          "expression": "VAR ebitda_actual = [EBITDA]\nVAR ebitda_budget =\n    CALCULATE(\n        SUM(agg_pl_monthly[ebitda_budget]),\n        NOT ISBLANK(agg_pl_monthly[ebitda_budget])\n    )\nRETURN\n    IF(\n        ISBLANK(ebitda_budget),\n        BLANK(),\n        ebitda_actual - ebitda_budget\n    )",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "VAR_ — Variance vs Budget"
+        },
+
+        {
+          "name": "Revenue RAG",
+          "description": "Traffic-light status for revenue vs budget. GREEN ≥ 0%, AMBER -5% to 0%, RED < -5%.",
+          "expression": "VAR variance_pct = [Revenue Variance %]\nRETURN\n    SWITCH(\n        TRUE(),\n        ISBLANK(variance_pct), \"GREY\",\n        variance_pct >= 0.00,  \"GREEN\",\n        variance_pct >= -0.05, \"AMBER\",\n        \"RED\"\n    )",
+          "formatString": "@",
+          "displayFolder": "RAG_ — Status Indicators"
+        },
+
+        {
+          "name": "EBITDA RAG",
+          "description": "Traffic-light status for EBITDA vs budget. GREEN ≥ 0%, AMBER -5% to 0%, RED < -5%.",
+          "expression": "VAR actual  = [EBITDA]\nVAR budget  = CALCULATE(SUM(agg_pl_monthly[ebitda_budget]), NOT ISBLANK(agg_pl_monthly[ebitda_budget]))\nVAR pct_var = DIVIDE(actual - budget, ABS(budget), BLANK())\nRETURN\n    SWITCH(\n        TRUE(),\n        ISBLANK(pct_var), \"GREY\",\n        pct_var >= 0.00,  \"GREEN\",\n        pct_var >= -0.05, \"AMBER\",\n        \"RED\"\n    )",
+          "formatString": "@",
+          "displayFolder": "RAG_ — Status Indicators"
+        },
+
+        {
+          "name": "DQ Pass Rate %",
+          "description": "Percentage of DQ rule checks that passed. Target ≥ 99%. Controller dashboard gauge.",
+          "expression": "DIVIDE(\n    CALCULATE(\n        COUNTROWS(audit_data_quality_log),\n        audit_data_quality_log[check_result] = \"PASS\"\n    ),\n    COUNTROWS(audit_data_quality_log),\n    BLANK()\n)",
+          "formatString": "0.0%",
+          "displayFolder": "RAG_ — Status Indicators"
+        },
+
+        {
+          "name": "Open Quarantine Count",
+          "description": "Count of unresolved quarantine records. Target = 0 at period close.",
+          "expression": "CALCULATE(\n    COUNTROWS(audit_quarantine),\n    audit_quarantine[resolution_status] = \"OPEN\"\n)",
+          "formatString": "#,0",
+          "displayFolder": "RAG_ — Status Indicators"
+        },
+
+        {
+          "name": "Open Critical Alerts",
+          "description": "Count of open critical platform alerts. Drives the alert badge on the CEO dashboard.",
+          "expression": "CALCULATE(\n    COUNTROWS(audit_alert_log),\n    audit_alert_log[status]   = \"OPEN\",\n    audit_alert_log[severity] = \"CRITICAL\"\n)",
+          "formatString": "#,0",
+          "displayFolder": "RAG_ — Status Indicators"
+        },
+
+        {
+          "name": "Revenue YTD",
+          "description": "Year-to-date cumulative revenue from January 1 of the selected fiscal year.",
+          "expression": "CALCULATE(\n    [Revenue],\n    DATESYTD(silver_dim_date[calendar_date])\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "TI_ — Time Intelligence"
+        },
+
+        {
+          "name": "Revenue PY",
+          "description": "Revenue for the same calendar period one year prior. Used in YoY variance calculations.",
+          "expression": "CALCULATE(\n    [Revenue],\n    SAMEPERIODLASTYEAR(silver_dim_date[calendar_date])\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "TI_ — Time Intelligence"
+        },
+
+        {
+          "name": "Revenue YoY %",
+          "description": "Revenue growth rate year-over-year. BLANK if prior year data unavailable.",
+          "expression": "VAR current = [Revenue]\nVAR prior   = [Revenue PY]\nRETURN\n    DIVIDE(\n        current - prior,\n        ABS(prior),\n        BLANK()\n    )",
+          "formatString": "+0.0%;-0.0%;0.0%",
+          "displayFolder": "TI_ — Time Intelligence"
+        },
+
+        {
+          "name": "EBITDA YTD",
+          "description": "Year-to-date EBITDA. Used in YTD budget variance analysis on CFO dashboard.",
+          "expression": "CALCULATE(\n    [EBITDA],\n    DATESYTD(silver_dim_date[calendar_date])\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "TI_ — Time Intelligence"
+        },
+
+        {
+          "name": "Net Profit YTD",
+          "description": "Year-to-date net profit (Mérleg szerinti eredmény YTD).",
+          "expression": "CALCULATE(\n    [Net Profit],\n    DATESYTD(silver_dim_date[calendar_date])\n)",
+          "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "TI_ — Time Intelligence"
+        }
+
+      ]
+    }
+  }
+}

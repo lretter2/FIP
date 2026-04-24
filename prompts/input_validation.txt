@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Variance Fact Pack - HU GAAP 2026",
+  "type": "object",
+  "required": ["period_info", "kpis", "cash_position", "alerts"],
+  "properties": {
+    "period_info": {
+      "type": "object",
+      "required": ["month", "year", "currency"],
+      "properties": {
+        "month": { "type": "string" },
+        "year": { "type": "integer", "const": 2026 },
+        "currency": { "type": "string", "enum": ["HUF", "EUR"] }
+      }
+    },
+    "kpis": {
+      "type": "object",
+      "required": ["revenue", "ebitda", "net_profit"],
+      "properties": {
+        "revenue": { "$ref": "#/definitions/metric_comparison" },
+        "ebitda": { "$ref": "#/definitions/metric_comparison" },
+        "net_profit": { "$ref": "#/definitions/metric_comparison" },
+        "gross_margin": { "$ref": "#/definitions/metric_comparison" },
+        "dso": { "type": "number", "description": "Days Sales Outstanding" }
+      }
+    },
+    "cash_position": {
+      "type": "object",
+      "required": ["cash_on_hand", "burn_rate_months", "fcf_trend"],
+      "properties": {
+        "cash_on_hand": { "type": "number" },
+        "burn_rate_months": { "type": "number" },
+        "fcf_trend": { "type": "string", "enum": ["improving", "stable", "deteriorating"] }
+      }
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "metric": { "type": "string" },
+          "variance_pct": { "type": "number" },
+          "critical": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "metric_comparison": {
+      "type": "object",
+      "required": ["actual", "budget", "prior_year"],
+      "properties": {
+        "actual": { "type": "number" },
+        "budget": { "type": "number" },
+        "prior_year": { "type": "number" }
+      }
+    }
+  }
+}

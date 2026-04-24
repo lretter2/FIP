@@ -1,0 +1,64 @@
+{
+  "_comment": "FIP Power BI RLS Role → AAD Group Mapping. Maintained by IT Administrator. Changes here must be synchronised to the Power BI dataset via sync_rls_aad.py.",
+  "_version": "1.1",
+  "_last_updated": "2026-04-20",
+  "roles": [
+    {
+      "role_name": "CEO",
+      "description": "Full group-level visibility — sees all entities in their consolidation group. No audit table PII.",
+      "dax_filter": "silver_dim_entity[consolidation_group] IN VALUES(config_ref_entity_master[consolidation_group])",
+      "aad_groups": [
+        "FIP-Role-CEO"
+      ],
+      "members_by_email": []
+    },
+    {
+      "role_name": "CFO",
+      "description": "Full entity access, full financial data, no direct quarantine PII.",
+      "dax_filter": "",
+      "aad_groups": [
+        "FIP-Role-CFO",
+        "FIP-Role-FinanceDirector"
+      ],
+      "members_by_email": []
+    },
+    {
+      "role_name": "Controller",
+      "description": "Full entity access plus audit tables including quarantine and DQ logs.",
+      "dax_filter": "",
+      "aad_groups": [
+        "FIP-Role-Controller",
+        "FIP-Role-ChiefAccountant"
+      ],
+      "members_by_email": []
+    },
+    {
+      "role_name": "CostCentreManager",
+      "description": "Sees only their assigned cost centres. Entity-level totals not visible.",
+      "dax_filter": "silver_dim_cost_centre[manager_name] = USERPRINCIPALNAME()",
+      "aad_groups": [
+        "FIP-Role-CostCentreManager"
+      ],
+      "members_by_email": [],
+      "_note": "silver.dim_cost_centre.manager_name must contain the user's UPN exactly as registered in AAD."
+    },
+    {
+      "role_name": "Auditor",
+      "description": "Read-only access to financial statements and audit trail. No transaction-level PII. Limited to audit-period entities.",
+      "dax_filter": "silver_dim_entity[entity_code] IN {\"ACME_HU\", \"BETA_HU\"}",
+      "aad_groups": [
+        "FIP-Role-ExternalAuditor"
+      ],
+      "members_by_email": [],
+      "_note": "Update entity_code list for each audit engagement. Remove auditor group membership immediately after audit completion."
+    }
+  ],
+  "sync_config": {
+    "sync_script": "PowerBI/rls/sync_rls_aad.py",
+    "schedule": "Daily 05:00 CET (before first dashboard refresh)",
+    "on_change_trigger": "ADF pipeline trigger: pl_aad_group_sync",
+    "dataset_id_env_var": "POWERBI_PROD_DATASET_ID",
+    "workspace_id_env_var": "POWERBI_PROD_WORKSPACE_ID"
+  },
+  "_supported_persona_set": "CEO,CFO,Controller,CostCentreManager,Auditor"
+}

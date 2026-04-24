@@ -1,0 +1,137 @@
+{
+  "name": "pl_rls_sync",
+  "description": "FIP Power BI RLS AAD Sync Pipeline. Resolves FINDING B-03 (manual RLS membership). Reads rls_roles.json, resolves AAD group members via Microsoft Graph API, and synchronises Power BI dataset role membership via REST API. Runs daily at 05:00 CET (before dashboard refresh) and after every PROD deployment.",
+  "properties": {
+    "description": "Synchronise Power BI RLS role membership from AAD groups. Runs before the daily Power BI dataset refresh.",
+    "activities": [
+
+      {
+        "name": "Validate environment variables",
+        "description": "Pre-flight check: verify all required env vars are set in Key Vault-linked config before executing sync.",
+        "type": "Script",
+        "linkedServiceName": {
+          "referenceName": "ls_synapse_serverless",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": "SELECT\n    CASE\n        WHEN '$(POWERBI_PROD_WORKSPACE_ID)' = '' THEN 1/0  -- will fail if blank\n        WHEN '$(POWERBI_PROD_DATASET_ID)'   = '' THEN 1/0\n        ELSE 1\n    END AS preflight_ok;"
+            }
+          ]
+        }
+      },
+
+      {
+        "name": "Sync RLS via Azure Function",
+        "description": "Calls the FIP RLS Sync Azure Function (HTTP trigger) which internally runs sync_rls_aad.py. Returns 200 on success with a JSON body containing role sync statistics.",
+        "type": "WebActivity",
+        "dependsOn": [
+          {
+            "activity": "Validate environment variables",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:10:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false
+        },
+        "typeProperties": {
+          "method": "POST",
+          "url": {
+            "value": "@pipeline().globalParameters.rls_sync_function_url",
+            "type": "Expression"
+          },
+          "headers": {
+            "Content-Type": "application/json",
+            "x-functions-key": {
+              "value": "@activity('Get Function Key').output.value",
+              "type": "Expression"
+            }
+          },
+          "body": {
+            "value": "@json(concat('{\"dry_run\":false,\"role_filter\":null,\"workspace_id\":\"', pipeline().globalParameters.powerbi_prod_workspace_id, '\",\"dataset_id\":\"', pipeline().globalParameters.powerbi_prod_dataset_id, '\"}'  ))",
+            "type": "Expression"
+          },
+          "authentication": {
+            "type": "MSI",
+            "resource": "https://management.azure.com/"
+          }
+        }
+      },
+
+      {
+        "name": "Evaluate sync result",
+        "description": "Check the Azure Function response. Fail the pipeline if sync_status != 'success' so ADF alerts are triggered.",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Sync RLS via Azure Function",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(activity('Sync RLS via Azure Function').output.sync_status, 'success')",
+            "type": "Expression"
+          },
+          "ifFalseActivities": [
+            {
+              "name": "Fail on sync error",
+              "type": "Fail",
+              "typeProperties": {
+                "message": {
+                  "value": "@concat('RLS sync failed: ', activity('Sync RLS via Azure Function').output.error_message)",
+                  "type": "Expression"
+                },
+                "errorCode": "RLS_SYNC_FAILED"
+              }
+            }
+          ]
+        }
+      },
+
+      {
+        "name": "Log sync result to audit",
+        "description": "Write RLS sync audit record to audit.batch_log with role counts and any delta changes.",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Evaluate sync result",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "ls_synapse_serverless",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "NonQuery",
+              "text": {
+                "value": "@concat(\n  'INSERT INTO audit.batch_log (batch_id, pipeline_name, pipeline_run_id, entity_code, period_key, status, started_at, completed_at, records_processed, error_message) VALUES (gen_random_uuid(), ''pl_rls_sync'', ''',\n  pipeline().RunId,\n  ''', ''ALL_ENTITIES'', NULL, ''PASSED'', ''',\n  pipeline().TriggerTime,\n  ''', NOW(), ',\n  activity('Sync RLS via Azure Function').output.total_changes,\n  ', NULL);'\n)",
+                "type": "Expression"
+              }
+            }
+          ]
+        }
+      }
+    ],
+
+    "parameters": {},
+
+    "variables": {
+      "sync_status": {
+        "type": "String",
+        "defaultValue": "pending"
+      }
+    },
+
+    "annotations": ["rls", "powerbi", "aad", "security", "daily"]
+  }
+}
