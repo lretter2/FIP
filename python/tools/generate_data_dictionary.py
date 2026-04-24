@@ -208,13 +208,14 @@ def generate_excel(objects, columns):
         ws_obj.append([r["source"], r["schema"], r["object_name"], r["object_type"], r["source_path"]])
 
     ws_col = wb.create_sheet("Columns")
-    ws_col.append(["schema", "table_name", "column_name", "ordinal_position", "data_type", "nullable", "source", "source_path"])
-    for r in sorted(columns, key=lambda x: (x["schema"], x["table_name"], x["ordinal_position"])):
-        ws_col.append([r["schema"], r["table_name"], r["column_name"], r["ordinal_position"], r["data_type"], r["nullable"], r["source"], r["source_path"]])
+    ws_col.append(["schema", "table_name", "column_name", "ordinal_position", "data_type", "nullable"])
+    for r in sorted(columns, key=lambda x: (x["schema"], x["table"], x["ordinal"])):
+        ws_col.append([r["schema"], r["table"], r["column_name"], r["ordinal"], r["type"], r["nullable"]])
 
+    index_rows = locals().get("indexes", globals().get("indexes", []))
     ws_idx = wb.create_sheet("Indexes")
     ws_idx.append(["schema", "table_name", "index_name", "index_columns", "source_path"])
-    for r in sorted(indexes, key=lambda x: (x["schema"], x["table_name"], x["index_name"])):
+    for r in sorted(index_rows, key=lambda x: (x["schema"], x["table_name"], x["index_name"])):
         ws_idx.append([r["schema"], r["table_name"], r["index_name"], r["index_columns"], r["source_path"]])
 
     ws_kpi = wb.create_sheet("KPI_Views")
