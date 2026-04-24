@@ -1,0 +1,262 @@
+version: 1
+
+##############################################################################
+#  Marts Layer — Schema & Model Documentation
+#  Financial Intelligence Platform · HU GAAP
+#
+#  Finance mart models produce Gold Zone physical tables consumed by Power BI.
+#  Analytics mart models produce KPI tables with pre-computed ratios.
+#
+#  Materialisation:
+#    marts/finance     → table  (incremental where appropriate)
+#    marts/analytics   → table  (full refresh nightly)
+##############################################################################
+
+models:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # FINANCE MART MODELS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - name: fct_gl_transaction
+    description: >
+      Central GL transaction fact table in the Gold Zone.
+      One row per ERP posting line, fully enriched with resolved dimension
+      labels (l1_category, l2_subcategory, pl_line_item) to eliminate DAX
+      JOINs in Power BI DirectQuery mode.
+      Materialised as an INCREMENTAL table — only new batches are appended
+      on each pipeline run.
+    columns:
+      - name: transaction_id
+        description: "Business key from source ERP — unique per entity"
+        tests: [not_null, unique]
+      - name: period_key
+        description: "YYYYMM integer period key"
+        tests: [not_null]
+      - name: entity_key
+        description: "Foreign key to silver.dim_entity"
+        tests: [not_null]
+      - name: account_key
+        description: "Foreign key to silver.dim_account"
+        tests: [not_null]
+      - name: date_key
+        description: "Foreign key to silver.dim_date (YYYYMMDD)"
+        tests: [not_null]
+      - name: net_amount_lcy
+        description: "Net posting amount in entity local currency HUF (debit minus credit)"
+        tests: [not_null]
+      - name: net_amount_eur
+        description: "EUR equivalent using NBH mid rate"
+      - name: l1_category
+        description: "Top-level HU GAAP classification: Asset / Revenue / Expense / etc."
+        tests: [not_null]
+      - name: pl_line_item
+        description: "Income statement line item classification"
+      - name: batch_id
+        description: "ADF batch ID linking to audit.batch_log"
+        tests: [not_null]
+
+  - name: agg_pl_monthly
+    description: >
+      Monthly profit & loss aggregation per entity.
+      One row per entity per YYYYMM period.
+      Includes revenue, COGS, gross profit, EBITDA, EBIT, net profit,
+      budget variance columns, and prior-year comparatives.
+      Full refresh on every pipeline run.
+    columns:
+      - name: period_key
+        description: "YYYYMM integer period key"
+        tests: [not_null]
+      - name: entity_key
+        description: "Foreign key to silver.dim_entity"
+        tests: [not_null]
+      - name: revenue
+        description: "Total revenue in HUF for the period"
+        tests: [not_null]
+      - name: gross_profit
+        description: "Revenue minus COGS"
+        tests: [not_null]
+      - name: gross_margin_pct
+        description: "Gross profit as a % of revenue"
+      - name: ebitda
+        description: "Earnings before interest, tax, depreciation and amortisation"
+        tests: [not_null]
+      - name: ebit
+        description: "EBITDA minus depreciation and amortisation"
+        tests: [not_null]
+      - name: net_profit
+        description: "Bottom-line profit after tax (HU corporate tax 9%)"
+        tests: [not_null]
+      - name: revenue_budget
+        description: "Budgeted revenue for the period from the active budget version"
+      - name: revenue_variance
+        description: "Actual revenue minus budget revenue"
+      - name: revenue_py
+        description: "Revenue in the same period of the prior year"
+
+  - name: agg_balance_sheet
+    description: >
+      Period-end balance sheet snapshot per entity.
+      One row per entity per account node per YYYYMM period.
+      Source: silver fact GL + HU GAAP universal node mapping.
+      Used by all KPI models for asset/liability/equity ratios.
+    columns:
+      - name: period_key
+        description: "YYYYMM integer period key"
+        tests: [not_null]
+      - name: entity_key
+        description: "Foreign key to silver.dim_entity"
+        tests: [not_null]
+      - name: universal_node
+        description: "HU GAAP taxonomy node (e.g. ASSET.CURRENT.CASH)"
+        tests: [not_null]
+      - name: account_type
+        description: "Asset | Liability | Equity"
+        tests:
+          - accepted_values:
+              values: ["Asset", "Liability", "Equity"]
+      - name: closing_balance_lcy
+        description: "Period-end closing balance in HUF"
+        tests: [not_null]
+
+  - name: agg_cashflow
+    description: >
+      Monthly indirect cash flow statement per entity.
+      One row per entity per YYYYMM period.
+      Derives operating / investing / financing cash flows from the GL
+      using the cf_classification tag on each universal node.
+      Includes operating_cash_flow_budget for variance reporting.
+    columns:
+      - name: period_key
+        description: "YYYYMM integer period key"
+        tests: [not_null]
+      - name: entity_key
+        description: "Foreign key to silver.dim_entity"
+        tests: [not_null]
+      - name: operating_cash_flow
+        description: "Cash generated from operations in HUF"
+        tests: [not_null]
+      - name: investing_cash_flow
+        description: "Cash used in investing activities (usually negative = CapEx)"
+        tests: [not_null]
+      - name: financing_cash_flow
+        description: "Cash from / used in financing activities"
+        tests: [not_null]
+      - name: free_cash_flow
+        description: "Operating CF minus CapEx"
+        tests: [not_null]
+      - name: capex
+        description: "Capital expenditure (negative value = cash outflow)"
+      - name: net_cash_movement
+        description: "Sum of all three cash flow components"
+        tests: [not_null]
+      - name: operating_cash_flow_budget
+        description: "Budgeted operating cash flow from active budget version"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # ANALYTICS / KPI MART MODELS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - name: kpi_profitability
+    description: >
+      Pre-computed profitability and return KPIs per entity per period.
+      Includes gross margin, EBITDA margin, net profit margin, ROA, ROE,
+      ROIC, and budget/prior-year variances.
+      Direct source for the CFO Profitability dashboard in Power BI.
+    columns:
+      - name: period_key
+        description: "YYYYMM integer period key"
+        tests: [not_null]
+      - name: entity_key
+        description: "Foreign key to silver.dim_entity"
+        tests: [not_null]
+      - name: gross_margin_pct
+        description: "Gross Margin % — KPI 1"
+      - name: ebitda_margin_pct
+        description: "EBITDA Margin % — KPI 3"
+      - name: net_profit_margin_pct
+        description: "Net Profit Margin % — KPI 4"
+      - name: roa_pct
+        description: "Return on Assets % — KPI 5"
+      - name: roe_pct
+        description: "Return on Equity % — KPI 6"
+      - name: roic_pct
+        description: "Return on Invested Capital % — KPI 8"
+
+  - name: kpi_liquidity
+    description: >
+      Pre-computed liquidity, solvency, and working capital KPIs per entity.
+      Includes current ratio, quick ratio, DSO, DPO, DIO, CCC,
+      net debt / EBITDA, interest coverage, equity ratio, gearing.
+      Direct source for the CFO Liquidity and Controller dashboards.
+    columns:
+      - name: period_key
+        description: "YYYYMM integer period key"
+        tests: [not_null]
+      - name: entity_key
+        description: "Foreign key to silver.dim_entity"
+        tests: [not_null]
+      - name: current_ratio
+        description: "Current assets / current liabilities — KPI 10. Target > 1.5"
+      - name: quick_ratio
+        description: "Quick ratio excluding inventory — KPI 11"
+      - name: dso_days
+        description: "Days Sales Outstanding — KPI 13"
+      - name: dpo_days
+        description: "Days Payable Outstanding — KPI 14"
+      - name: cash_conversion_cycle_days
+        description: "Cash Conversion Cycle = DSO + DIO - DPO — KPI 12"
+      - name: net_debt_ebitda
+        description: "Net Debt / LTM EBITDA leverage ratio — KPI 16"
+      - name: interest_coverage
+        description: "EBIT / Net Interest Expense — KPI 17. Target > 3x"
+
+  - name: kpi_cashflow
+    description: >
+      Pre-computed cash flow quality and sustainability KPIs per entity.
+      Includes OCF margin, CapEx intensity, cash flow conversion,
+      burn rate, cash runway, and reinvestment rate.
+      Used on the CFO Cash Flow and Investor dashboards.
+    columns:
+      - name: period_key
+        description: "YYYYMM integer period key"
+        tests: [not_null]
+      - name: entity_key
+        description: "Foreign key to silver.dim_entity"
+        tests: [not_null]
+      - name: ocf_margin_pct
+        description: "Operating CF as % of revenue — KPI 23"
+      - name: capex_intensity_pct
+        description: "CapEx as % of revenue — KPI 24"
+      - name: cf_conversion_pct
+        description: "OCF / EBITDA — KPI 26. >80% = strong working capital"
+      - name: cash_runway_months
+        description: "Months of cash at current burn rate — KPI 28. NULL if OCF positive"
+      - name: reinvestment_rate_pct
+        description: "CapEx / Operating CF — KPI 29"
+
+  - name: kpi_project
+    description: >
+      Project-level P&L, cost tracking, and margin analysis.
+      One row per entity per project per period.
+      Only populated for GL transactions tagged with a project_key.
+      Includes cost overrun flag (>5% over budget) for Controller alerts.
+    columns:
+      - name: period_key
+        description: "YYYYMM integer period key"
+        tests: [not_null]
+      - name: entity_key
+        description: "Foreign key to silver.dim_entity"
+        tests: [not_null]
+      - name: project_key
+        description: "Foreign key to silver.dim_project"
+        tests: [not_null]
+      - name: project_gross_margin_pct
+        description: "Project revenue minus COGS as % of project revenue"
+      - name: ytd_cost_overrun_pct
+        description: "YTD cost vs. total project budget %"
+      - name: is_cost_overrun
+        description: "1 if YTD cost exceeds budget by >5%, 0 otherwise"
+        tests:
+          - accepted_values:
+              values: [0, 1]

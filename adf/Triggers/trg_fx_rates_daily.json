@@ -1,0 +1,38 @@
+{
+  "name": "trg_fx_rates_daily",
+  "description": "Daily trigger to pull NBH (Magyar Nemzeti Bank) FX rates at 09:00 CET (after MNB publishes daily rates). Populates config.ref_fx_rates for same-day use by dbt FX conversion models.",
+
+  "properties": {
+    "type": "ScheduleTrigger",
+    "description": "Daily MNB FX rate ingestion — fires at 09:05 CET every weekday. MNB publishes rates at ~09:00. Weekend rates are not published; the pipeline handles this by carrying forward Friday closing rates.",
+
+    "typeProperties": {
+      "recurrence": {
+        "frequency": "Week",
+        "interval": 1,
+        "schedule": {
+          "weekDays": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+          "hours":   [9],
+          "minutes": [5]
+        },
+        "startTime": "2026-01-02T09:05:00",
+        "timeZone": "Central European Standard Time"
+      }
+    },
+
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "pl_fx_rates_ingest",
+          "type": "PipelineReference"
+        },
+        "parameters": {
+          "rate_date":    { "value": "@formatDateTime(trigger().scheduledTime, 'yyyy-MM-dd')", "type": "Expression" },
+          "triggered_by": "SCHEDULE"
+        }
+      }
+    ],
+
+    "annotations": ["schedule", "fx-rates", "daily", "mnb"]
+  }
+}

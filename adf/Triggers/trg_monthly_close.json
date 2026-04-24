@@ -1,0 +1,24 @@
+{
+  "name": "trg_monthly_close",
+  "description": "Fires on the 1st of every month at 00:00 CET and triggers pl_monthly_close for the PREVIOUS calendar month. FIX (2026-04-09): Replaced fragile sub(month,1) arithmetic with addToTime(-1,'Month') which correctly handles all month-boundary and timezone edge cases.",
+  "properties": {
+    "type": "ScheduleTrigger",
+    "typeProperties": {
+      "recurrence": {
+        "frequency": "Month",
+        "interval": 1,
+        "schedule": { "monthDays": [1], "hours": [0], "minutes": [0] },
+        "timeZone": "Central European Standard Time"
+      }
+    },
+    "pipelines": [
+      {
+        "pipelineReference": { "referenceName": "pl_monthly_close", "type": "PipelineReference" },
+        "parameters": {
+          "period_year":  "@year(addToTime(trigger().scheduledTime, -1, 'Month'))",
+          "period_month": "@month(addToTime(trigger().scheduledTime, -1, 'Month'))"
+        }
+      }
+    ]
+  }
+}

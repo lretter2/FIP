@@ -1,0 +1,17 @@
+{
+  "name": "ls_rest_szamlazz",
+  "description": "REST linked service for Számlázz.hu invoice export API (https://www.szamlazz.hu/szamla/). Uses agent authentication with XML payload. Credentials stored in Azure Key Vault.",
+  "properties": {
+    "type": "RestService",
+    "typeProperties": {
+      "url": "https://www.szamlazz.hu/szamla/",
+      "enableServerCertificateValidation": true,
+      "authenticationType": "Anonymous",
+      "httpHeaders": {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/xml"
+      }
+    },
+    "annotations": ["erp", "szamlazz", "rest", "source", "invoice"]
+  }
+}

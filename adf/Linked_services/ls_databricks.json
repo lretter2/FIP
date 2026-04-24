@@ -1,0 +1,29 @@
+{
+  "name": "ls_databricks",
+  "description": "Azure Databricks linked service for dbt ELT compute and ML workloads (anomaly detection, forecasting). Uses existing cluster or job cluster depending on workload type.",
+  "properties": {
+    "type": "AzureDatabricks",
+    "typeProperties": {
+      "domain": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "databricks-workspace-url"
+      },
+      "accessToken": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "databricks-pat-token"
+      },
+      "existingClusterId": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "databricks-cluster-id"
+      }
+    },
+    "annotations": ["compute", "databricks", "dbt"],
+    "connectVia": {
+      "referenceName": "AutoResolveIntegrationRuntime",
+      "type": "IntegrationRuntimeReference"
+    }
+  }
+}

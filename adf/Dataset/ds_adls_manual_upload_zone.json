@@ -1,0 +1,19 @@
+{
+  "name": "ds_adls_manual_upload_zone",
+  "description": "ADLS Gen2 manual CSV upload zone. Finance team drops flat files here. Path: bronze-upload/{entity_code}/. ADF monitors and moves to the Bronze landing zone.",
+  "properties": {
+    "linkedServiceName": { "referenceName": "ls_adls_gen2", "type": "LinkedServiceReference" },
+    "parameters": {
+      "entity_code": { "type": "String" }
+    },
+    "type": "AzureBlobFSFile",
+    "typeProperties": {
+      "format": { "type": "TextFormat", "columnDelimiter": ";", "firstRowAsHeader": true, "encodingName": "UTF-8" },
+      "folderPath": {
+        "value": "bronze-upload/@{dataset().entity_code}",
+        "type": "Expression"
+      },
+      "fileSystem": "fip-data"
+    }
+  }
+}

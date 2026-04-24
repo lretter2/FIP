@@ -1,0 +1,102 @@
+version: 1
+
+##############################################################################
+#  Intermediate Layer — Schema & Model Documentation
+#  Financial Intelligence Platform · HU GAAP
+#
+#  Intermediate models apply HU GAAP business logic on top of the raw
+#  staging data. They are materialised as views (no physical storage).
+#  No tests at this layer reference source tables — only refs to staging.
+##############################################################################
+
+models:
+
+  - name: int_coa_mapped
+    description: >
+      Applies the universal HU GAAP account taxonomy (from ref_coa_mapping seed)
+      to every staging GL transaction. Translates local account codes (e.g. '311')
+      into universal nodes (e.g. 'ASSET.CURRENT.RECEIVABLES.TRADE').
+      Unmapped rows are routed to a quarantine CTE, not silently dropped.
+      Coverage target: >95% of transaction volume must be mapped before go-live.
+    columns:
+      - name: transaction_id
+        description: "Source ERP transaction identifier — passed through from staging"
+        tests: [not_null]
+      - name: company_id
+        description: "Legal entity identifier"
+        tests: [not_null]
+      - name: universal_node
+        description: >
+          HU GAAP taxonomy node assigned by the CoA mapping seed.
+          Pattern: L1.L2.L3.L4 (e.g. ASSET.CURRENT.RECEIVABLES.TRADE).
+          NULL only for quarantined (unmapped) rows.
+      - name: account_type
+        description: "Asset | Liability | Equity | Revenue | Expense — from mapping"
+        tests:
+          - accepted_values:
+              values: ["Asset", "Liability", "Equity", "Revenue", "Expense", "Cost"]
+      - name: normal_balance
+        description: "D = Debit normal balance, C = Credit normal balance"
+        tests:
+          - accepted_values:
+              values: ["D", "C"]
+      - name: l1_category
+        description: "Level 1 account classification: Asset / Liability / Equity / Revenue / Expense"
+        tests: [not_null]
+      - name: l2_subcategory
+        description: "Level 2 subcategory e.g. Current, Non-current, Operating"
+      - name: l3_detail
+        description: "Level 3 detail classification e.g. PPE, Inventory, Payroll"
+      - name: pl_line_item
+        description: "P&L line item tag used for income statement aggregation (e.g. COGS, EBITDA)"
+      - name: cf_classification
+        description: "Cash flow statement classification: Operating | Investing | Financing"
+        tests:
+          - accepted_values:
+              values: ["Operating", "Investing", "Financing", null]
+      - name: net_amount_lcy
+        description: "Net posting amount in HUF (debit minus credit)"
+        tests: [not_null]
+      - name: batch_id
+        description: "ADF batch identifier linking back to audit.batch_log"
+        tests: [not_null]
+
+  - name: int_fx_converted
+    description: >
+      Applies NBH (Magyar Nemzeti Bank) daily FX rates to every GL transaction,
+      producing EUR and HUF reporting-currency equivalents.
+      Source rates are loaded nightly by ADF pipeline from the MNB API.
+      Only transactions in non-HUF currencies are converted; HUF rows
+      pass through with amount_eur = amount_lcy / closing_rate_huf_eur.
+    columns:
+      - name: transaction_id
+        description: "Source ERP transaction identifier"
+        tests: [not_null]
+      - name: company_id
+        description: "Legal entity identifier"
+        tests: [not_null]
+      - name: currency_code
+        description: "ISO 4217 currency code of the original posting (from staging)"
+      - name: net_amount_lcy
+        description: "Net amount in entity local currency HUF (debit minus credit)"
+        tests: [not_null]
+      - name: net_amount_eur
+        description: >
+          EUR equivalent using NBH daily mid rate as at posting date.
+          Uses fallback rate (1/400) if no rate available for that date.
+      - name: net_amount_lcy_fx_adjusted
+        description: "FCY transactions reconverted to HUF using posting-date NBH rate"
+      - name: huf_to_eur_rate
+        description: "The NBH rate applied (1 HUF = X EUR)"
+      - name: fx_rate_date_eur
+        description: "The date for which the EUR FX rate was sourced from MNB"
+      - name: used_fallback_eur_rate
+        description: "1 if a fallback EUR rate was used (no rate for posting date), 0 otherwise"
+        tests:
+          - accepted_values:
+              values: [0, 1]
+      - name: used_fallback_fcy_rate
+        description: "1 if a fallback FCY rate was used, 0 otherwise"
+        tests:
+          - accepted_values:
+              values: [0, 1]

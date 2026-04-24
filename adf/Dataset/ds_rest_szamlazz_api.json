@@ -1,0 +1,66 @@
+{
+  "name": "ds_rest_szamlazz_api",
+  "description": "REST dataset for Számlázz.hu invoice export API (https://www.szamlazz.hu/szamla/). Retrieves issued invoice data as XML using agent-key authentication. Számlázz does not expose a GL interface — this dataset pulls issued invoices which are mapped to REVENUE accounts in the Bronze→Silver layer. Linked service: ls_rest_szamlazz. Remediates FINDING A-02.",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_rest_szamlazz",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "date_from": {
+        "type": "String",
+        "description": "Start date of the invoice query in YYYY-MM-DD format (inclusive). Typically first day of the period."
+      },
+      "date_to": {
+        "type": "String",
+        "description": "End date of the invoice query in YYYY-MM-DD format (inclusive). Typically last day of the period."
+      },
+      "entity_code": {
+        "type": "String",
+        "description": "FIP entity code — used for logging and Bronze path naming only. Számlázz is single-tenant per API key."
+      }
+    },
+    "type": "RestResource",
+    "typeProperties": {
+      "relativeUrl": "",
+      "requestMethod": "POST",
+      "requestBody": {
+        "value": "@{concat('<xmlszamlaxml xmlns=\"http://www.szamlazz.hu/xmlszamlaxml\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.szamlazz.hu/xmlszamlaxml https://www.szamlazz.hu/szamla/docs/xsds/agentxml/xmlszamlaxml.xsd\"><beallitasok><szamlaagentkulcs>', pipeline().globalParameters.szamlazz_agent_key, '</szamlaagentkulcs><eszamla>true</eszamla></beallitasok><fejlec><datumtol>', dataset().date_from, '</datumtol><datumig>', dataset().date_to, '</datumig><rendezesi_szempont>teljesites</rendezesi_szempont></fejlec></xmlszamlaxml>')}",
+        "type": "Expression"
+      },
+      "additionalHeaders": {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "format": {
+        "type": "XmlReadSettings",
+        "validationMode": "none",
+        "detectDataType": true,
+        "compressionProperties": null
+      }
+    },
+    "schema": [
+      { "name": "szamlaszam",             "type": "String", "description": "Invoice number (számlaszám)" },
+      { "name": "kelte",                  "type": "String", "description": "Invoice issue date (ISO 8601)" },
+      { "name": "teljesites",             "type": "String", "description": "Performance / service delivery date" },
+      { "name": "fizetesi_hatarido",      "type": "String", "description": "Payment due date" },
+      { "name": "vevo_nev",              "type": "String", "description": "Customer name (vevő neve)" },
+      { "name": "vevo_adoszam",          "type": "String", "description": "Customer VAT number" },
+      { "name": "vevo_orszag",           "type": "String", "description": "Customer country (ISO 3166-1 alpha-2)" },
+      { "name": "netto_osszeg",          "type": "String", "description": "Net invoice amount (before VAT)" },
+      { "name": "afa_osszeg",            "type": "String", "description": "VAT amount (ÁFA összeg)" },
+      { "name": "brutto_osszeg",         "type": "String", "description": "Gross invoice total (nettó + ÁFA)" },
+      { "name": "devizanem",             "type": "String", "description": "Invoice currency (ISO 4217, e.g. HUF, EUR)" },
+      { "name": "deviza_arfolyam",       "type": "String", "description": "NBH exchange rate used for HUF conversion (if non-HUF)" },
+      { "name": "netto_huf",             "type": "String", "description": "Net amount in HUF (after FX conversion)" },
+      { "name": "brutto_huf",            "type": "String", "description": "Gross amount in HUF" },
+      { "name": "fizetesi_mod",          "type": "String", "description": "Payment method (átutalás / készpénz / bankkártya)" },
+      { "name": "szamla_tipus",          "type": "String", "description": "Invoice type (normál / helyesbítő / sztornó)" },
+      { "name": "eredeti_szamlaszam",    "type": "String", "description": "Original invoice number (for correction/storno invoices)" },
+      { "name": "megjegyzes",            "type": "String", "description": "Invoice memo / comment" },
+      { "name": "exported_at",           "type": "String", "description": "API export timestamp (UTC)" }
+    ],
+    "annotations": [
+      "erp", "szamlazz", "rest", "source", "invoice", "revenue", "bronze"
+    ]
+  }
+}

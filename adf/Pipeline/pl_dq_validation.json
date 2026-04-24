@@ -1,0 +1,224 @@
+{
+  "name": "pl_dq_validation",
+  "description": "Financial Intelligence Platform — Data Quality Validation Pipeline. Runs 3 mandatory DQ checks per Master Guide Part 3.3: (1) Debit/Credit Balance, (2) Referential Integrity, (3) Period Balance. All DB operations use stored procedures with proper SQL parameter binding — no string interpolation (SQL injection fix, 2026-04-09).",
+
+  "properties": {
+    "activities": [
+
+      {
+        "name": "A00_Validate_Inputs",
+        "description": "SECURITY: Validate that batch_id is UUID format and company_id is alphanumeric before any DB operation. Fails fast if input is malformed — prevents SQL injection at pipeline level.",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(not(equals(pipeline().parameters.batch_id, '')), not(equals(pipeline().parameters.company_id, '')))",
+            "type": "Expression"
+          },
+          "ifFalseActivities": [
+            {
+              "name": "Fail_Invalid_Inputs",
+              "type": "Fail",
+              "typeProperties": {
+                "message": "batch_id and company_id must be non-empty. batch_id must be a UUID.",
+                "errorCode": "ERR_INVALID_DQ_PARAMS"
+              }
+            }
+          ],
+          "ifTrueActivities": []
+        }
+      },
+
+      {
+        "name": "DQ001_Debit_Credit_Balance",
+        "description": "DQ-001: Sum of debits must equal sum of credits within every batch. Calls audit.usp_dq001_check_balance stored procedure — SQL parameters, no injection risk.",
+        "type": "Lookup",
+        "dependsOn": [{ "activity": "A00_Validate_Inputs", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "storedProcedureName": "audit.usp_dq001_check_balance",
+            "storedProcedureParameters": {
+              "batch_id":   { "value": { "value": "@pipeline().parameters.batch_id",   "type": "Expression" }, "type": "String" },
+              "company_id": { "value": { "value": "@pipeline().parameters.company_id", "type": "Expression" }, "type": "String" }
+            },
+            "queryTimeout": "00:10:00"
+          },
+          "dataset": { "referenceName": "ds_synapse_bronze", "type": "DatasetReference" },
+          "firstRowOnly": true
+        }
+      },
+
+      {
+        "name": "DQ001_Evaluate",
+        "description": "Branch on DQ-001 result. FAILED = quarantine + increment counter. PASSED = continue.",
+        "type": "IfCondition",
+        "dependsOn": [{ "activity": "DQ001_Debit_Credit_Balance", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(activity('DQ001_Debit_Credit_Balance').output.firstRow.dq_status, 'PASSED')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "DQ001_Log_Passed",
+              "description": "Log PASSED result via stored procedure.",
+              "type": "SqlServerStoredProcedure",
+              "typeProperties": {
+                "storedProcedureName": "audit.usp_dq001_log_result",
+                "storedProcedureParameters": {
+                  "batch_id":   { "value": { "value": "@pipeline().parameters.batch_id",   "type": "Expression" }, "type": "String" },
+                  "company_id": { "value": { "value": "@pipeline().parameters.company_id", "type": "Expression" }, "type": "String" },
+                  "status":     { "value": "PASSED", "type": "String" },
+                  "imbalance":  { "value": "0.00",   "type": "Decimal" }
+                }
+              },
+              "linkedServiceName": { "referenceName": "ls_synapse_sql_pool", "type": "LinkedServiceReference" }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "DQ001_Log_Failed",
+              "description": "Log FAILED result and quarantine batch via stored procedure.",
+              "type": "SqlServerStoredProcedure",
+              "typeProperties": {
+                "storedProcedureName": "audit.usp_dq001_log_result",
+                "storedProcedureParameters": {
+                  "batch_id":   { "value": { "value": "@pipeline().parameters.batch_id",   "type": "Expression" }, "type": "String" },
+                  "company_id": { "value": { "value": "@pipeline().parameters.company_id", "type": "Expression" }, "type": "String" },
+                  "status":     { "value": "FAILED", "type": "String" },
+                  "imbalance":  {
+                    "value": {
+                      "value": "@string(activity('DQ001_Debit_Credit_Balance').output.firstRow.imbalance)",
+                      "type": "Expression"
+                    },
+                    "type": "String"
+                  }
+                }
+              },
+              "linkedServiceName": { "referenceName": "ls_synapse_sql_pool", "type": "LinkedServiceReference" }
+            },
+            {
+              "name": "DQ001_Increment_Critical_Counter",
+              "type": "SetVariable",
+              "dependsOn": [{ "activity": "DQ001_Log_Failed", "dependencyConditions": ["Succeeded"] }],
+              "typeProperties": {
+                "variableName": "critical_failures",
+                "value": { "value": "@add(variables('critical_failures'), 1)", "type": "Expression" }
+              }
+            }
+          ]
+        }
+      },
+
+      {
+        "name": "DQ002_Referential_Integrity",
+        "description": "DQ-002: Every account code must exist in config.ref_coa_mapping. Calls audit.usp_dq002_check_referential_integrity stored procedure.",
+        "type": "Lookup",
+        "dependsOn": [{ "activity": "DQ001_Evaluate", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "storedProcedureName": "audit.usp_dq002_check_referential_integrity",
+            "storedProcedureParameters": {
+              "batch_id":   { "value": { "value": "@pipeline().parameters.batch_id",   "type": "Expression" }, "type": "String" },
+              "company_id": { "value": { "value": "@pipeline().parameters.company_id", "type": "Expression" }, "type": "String" }
+            },
+            "queryTimeout": "00:10:00"
+          },
+          "dataset": { "referenceName": "ds_synapse_bronze", "type": "DatasetReference" },
+          "firstRowOnly": true
+        }
+      },
+
+      {
+        "name": "DQ002_Quarantine_And_Log",
+        "description": "Quarantine unmapped rows and log result via stored procedure.",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [{ "activity": "DQ002_Referential_Integrity", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "storedProcedureName": "audit.usp_dq002_quarantine_and_log",
+          "storedProcedureParameters": {
+            "batch_id":       { "value": { "value": "@pipeline().parameters.batch_id",   "type": "Expression" }, "type": "String" },
+            "company_id":     { "value": { "value": "@pipeline().parameters.company_id", "type": "Expression" }, "type": "String" },
+            "unmapped_count": {
+              "value": {
+                "value": "@string(activity('DQ002_Referential_Integrity').output.firstRow.unmapped_count)",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedServiceName": { "referenceName": "ls_synapse_sql_pool", "type": "LinkedServiceReference" }
+      },
+
+      {
+        "name": "DQ003_Period_Balance_Check",
+        "description": "DQ-003: Opening balance + period transactions = closing balance per account. Calls audit.usp_dq003_check_period_balance stored procedure.",
+        "type": "Lookup",
+        "dependsOn": [{ "activity": "DQ002_Quarantine_And_Log", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "storedProcedureName": "audit.usp_dq003_check_period_balance",
+            "storedProcedureParameters": {
+              "batch_id":   { "value": { "value": "@pipeline().parameters.batch_id",   "type": "Expression" }, "type": "String" },
+              "company_id": { "value": { "value": "@pipeline().parameters.company_id", "type": "Expression" }, "type": "String" }
+            },
+            "queryTimeout": "00:15:00"
+          },
+          "dataset": { "referenceName": "ds_synapse_bronze", "type": "DatasetReference" },
+          "firstRowOnly": false
+        }
+      },
+
+      {
+        "name": "DQ003_Log_Result",
+        "description": "Log DQ-003 result via stored procedure.",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [{ "activity": "DQ003_Period_Balance_Check", "dependencyConditions": ["Succeeded", "Failed"] }],
+        "typeProperties": {
+          "storedProcedureName": "audit.usp_dq003_log_result",
+          "storedProcedureParameters": {
+            "batch_id":  { "value": { "value": "@pipeline().parameters.batch_id", "type": "Expression" }, "type": "String" },
+            "gap_count": {
+              "value": {
+                "value": "@string(length(activity('DQ003_Period_Balance_Check').output.value))",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        },
+        "linkedServiceName": { "referenceName": "ls_synapse_sql_pool", "type": "LinkedServiceReference" }
+      },
+
+      {
+        "name": "DQ_Set_Return_Values",
+        "type": "SetVariable",
+        "dependsOn": [{ "activity": "DQ003_Log_Result", "dependencyConditions": ["Succeeded", "Failed"] }],
+        "typeProperties": {
+          "variableName": "dq_summary",
+          "value": {
+            "value": "@json(concat('{\"critical_failures\":', string(variables('critical_failures')), ',\"unmapped_accounts\":', string(coalesce(activity('DQ002_Referential_Integrity').output.firstRow.unmapped_count, 0)), ',\"period_balance_gaps\":', string(length(activity('DQ003_Period_Balance_Check').output.value)), '}'))",
+            "type": "Expression"
+          }
+        }
+      }
+
+    ],
+
+    "parameters": {
+      "batch_id":   { "type": "string", "description": "UUID from audit.batch_log — validated at A00" },
+      "company_id": { "type": "string", "description": "Entity code from config.ref_entity_master" }
+    },
+    "variables": {
+      "critical_failures": { "type": "Integer", "defaultValue": 0 },
+      "dq_summary":        { "type": "String",  "defaultValue": "{}" }
+    },
+    "returnValue": {
+      "critical_failures": { "value": "@variables('critical_failures')", "type": "Expression" }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "ds_adls_bronze_landing",
+  "description": "ADLS Gen2 Bronze zone landing folder. Target for all ERP extract pipelines. Path pattern: bronze/{entity_code}/{YYYY}/{MM}/",
+  "properties": {
+    "linkedServiceName": { "referenceName": "ls_adls_gen2", "type": "LinkedServiceReference" },
+    "parameters": {
+      "entity_code":    { "type": "String" },
+      "period_year":    { "type": "Int" },
+      "period_month":   { "type": "Int" },
+      "file_name":      { "type": "String" }
+    },
+    "type": "AzureBlobFSFile",
+    "typeProperties": {
+      "format": { "type": "TextFormat", "columnDelimiter": ";", "rowDelimiter": "\n", "firstRowAsHeader": true, "encodingName": "UTF-8" },
+      "fileName": { "value": "@dataset().file_name", "type": "Expression" },
+      "folderPath": {
+        "value": "bronze/@{dataset().entity_code}/@{dataset().period_year}/@{formatNumber(dataset().period_month, '00')}",
+        "type": "Expression"
+      },
+      "fileSystem": "fip-data"
+    }
+  }
+}

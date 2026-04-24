@@ -1,0 +1,37 @@
+##############################################################################
+#  dbt Packages
+#  Financial Intelligence Platform · HU GAAP
+#
+#  Install with:  dbt deps
+#  Upgrade with:  dbt deps --upgrade
+##############################################################################
+
+packages:
+
+  # --------------------------------------------------------------------------
+  # dbt-utils — general utility macros (date_spine, surrogate_key, pivot, etc.)
+  # Used by:  dim_date population, surrogate key generation, test helpers
+  # --------------------------------------------------------------------------
+  - package: dbt-labs/dbt_utils
+    version: [">=1.0.0", "<1.0.0"]
+
+  # --------------------------------------------------------------------------
+  # dbt-expectations — Great Expectations style test macros
+  # Used by:  extended DQ tests (expect_column_values_to_be_between, etc.)
+  # --------------------------------------------------------------------------
+  - package: calogica/dbt_expectations
+    version: [">=1.0.0", "<1.0.0"]
+
+  # --------------------------------------------------------------------------
+  # dbt-date — fiscal calendar and Hungarian date helpers
+  # Used by:  fiscal_period macro, dim_date spine generation
+  # --------------------------------------------------------------------------
+  - package: calogica/dbt_date
+    version: [">=1.0.0", "<1.0.0"]
+
+  # --------------------------------------------------------------------------
+  # dbt-audit-helper — diff reports between dev and prod runs
+  # Used by:  pre-release validation of model changes
+  # --------------------------------------------------------------------------
+  - package: dbt-labs/audit_helper
+    version: [">=1.0.0", "<1.0.0"]

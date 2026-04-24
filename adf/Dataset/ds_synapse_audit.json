@@ -1,0 +1,13 @@
+{
+  "name": "ds_synapse_audit",
+  "description": "Azure Synapse Analytics dataset pointing at the audit schema. Used by all pipeline activities that write to audit.batch_log, audit.dq_results, and audit.dq_quarantine.",
+  "properties": {
+    "linkedServiceName": { "referenceName": "ls_synapse_sql_pool", "type": "LinkedServiceReference" },
+    "type": "AzureSqlDWTable",
+    "typeProperties": {
+      "schema": "audit",
+      "table":  "batch_log"
+    },
+    "annotations": ["audit", "system"]
+  }
+}

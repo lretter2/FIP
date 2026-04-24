@@ -1,0 +1,49 @@
+# Vendor Data Processing Agreements (DPA)
+
+This directory holds Data Processing Agreements and related vendor data-handling documentation
+for all external systems that process personal or financial data on behalf of the organisation
+under the Financial Intelligence Platform (FIP).
+
+**Legal basis:** GDPR Art. 28 (processor agreements), CCPA § 1798.140(v), and Hungarian Act CXII of 2011
+on the Right of Informational Self-Determination and on Freedom of Information.
+
+---
+
+## Vendor Index
+
+| Vendor | Service | DPA Status | Review Due | Owner |
+|---|---|---|---|---|
+| Microsoft Azure | Cloud infrastructure (Synapse, ADF, Key Vault, ADLS Gen2) | ✅ Signed — Microsoft DPA v2023 | Annual | IT Legal |
+| Kulcs-Soft Kft. | ERP source — GL transaction export via SFTP | ⚠️ Pending — template sent 2026-03-01 | 2026-05-01 | Finance Ops |
+| COBALT d.o.o. | ERP source — GL transaction export via REST API | ⚠️ Pending — initial contact made | 2026-05-01 | Finance Ops |
+| Számlázz.hu (KBOSS Kft.) | Invoice data source — REST/XML API | ✅ Signed — standard processor DPA | 2027-01-01 | Finance Ops |
+| SAP SE | SAP Business One Service Layer (OData) | ✅ Covered under SAP Enterprise Agreement | Annual | IT Legal |
+| OpenAI / Azure OpenAI Service | AI commentary & RAG queries | ✅ Azure OpenAI DPA via Microsoft | Annual | IT Legal |
+
+---
+
+## File Naming Convention
+
+Store signed DPA documents in this directory using the format:
+
+```
+DPA_<VendorShortName>_<YYYY-MM-DD_signed>.pdf
+```
+
+Example: `DPA_KulcsSoft_2026-04-15_signed.pdf`
+
+---
+
+## Pending Actions
+
+1. **Kulcs-Soft** — Follow up on unsigned DPA template. No personal data flows through
+   the SFTP feed (transaction data only), but a signed agreement is required for audit.
+2. **COBALT** — Schedule DPA review call. Confirm data residency (EU only).
+3. **Annual review** — Microsoft and SAP DPAs due for annual re-confirmation Q1 2027.
+
+---
+
+## Related Documents
+
+- `docs/SECURITY_AND_COMPLIANCE.md` — Full data governance and security policy
+- `iac/` — Azure resource definitions confirming data residency (West Europe region)

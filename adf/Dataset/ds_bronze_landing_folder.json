@@ -1,0 +1,20 @@
+{
+  "name": "ds_bronze_landing_folder",
+  "description": "ADLS Gen2 Bronze folder-level dataset used by Validation activities in pl_monthly_close to verify at least one file has landed before proceeding.",
+  "properties": {
+    "linkedServiceName": { "referenceName": "ls_adls_gen2", "type": "LinkedServiceReference" },
+    "parameters": {
+      "entity_code":  { "type": "String" },
+      "period_year":  { "type": "Int" },
+      "period_month": { "type": "Int" }
+    },
+    "type": "AzureBlobFSFile",
+    "typeProperties": {
+  "folderPath": {
+    "value": "bronze/@{dataset().entity_code}/@{dataset().period_year}/@{formatNumber(dataset().period_month, '00')}",
+    "type": "Expression"
+  },
+  "fileSystem": "bronze" // 'fip-data' helyett, hogy egyezzen a pipeline-al
+   }
+  }
+}

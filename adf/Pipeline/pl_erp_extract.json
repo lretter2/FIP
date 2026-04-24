@@ -1,0 +1,246 @@
+{
+  "name": "pl_erp_extract",
+  "description": "Financial Intelligence Platform — ERP Extract Pipeline. Extracts GL transaction flat files from source ERP systems (Kulcs-Soft, COBALT, Számlázz.hu, SAP Business One) and lands them in the ADLS Gen2 Bronze zone. Called by pl_monthly_close as Activity A01.",
+
+  "properties": {
+    "description": "Extract GL and balance sheet files from source ERP. Supports CSV/XML exports. Lands files in adls://bronze/{entity_code}/{YYYY}/{MM}/. File naming: {source_system}_{entity_code}_{YYYYMM}_{timestamp}.{ext}",
+
+    "parameters": {
+      "company_id":     { "type": "string",  "description": "Entity code from config.ref_entity_master e.g. ACME_HU" },
+      "period_year":    { "type": "int",     "description": "Fiscal year e.g. 2026" },
+      "period_month":   { "type": "int",     "description": "Fiscal month 1-12" },
+      "source_system":  { "type": "string",  "description": "ERP identifier: KULCS_SOFT | COBALT | SZAMLAZZ | SAP_B1 | MANUAL_CSV" },
+      "batch_id":       { "type": "string",  "description": "UUID from parent pipeline audit.batch_log" }
+    },
+
+    "variables": {
+      "extraction_status":  { "type": "String",  "defaultValue": "PENDING" },
+      "files_landed":       { "type": "Integer", "defaultValue": 0 },
+      "total_rows_raw":     { "type": "Integer", "defaultValue": 0 }
+    },
+
+    "activities": [
+
+      {
+        "name": "A01_Resolve_ERP_Config",
+        "description": "Look up entity connection string, export path, and credentials from config.ref_entity_master. Returns erp_system, erp_company_code, and ADLS target path.",
+        "type": "Lookup",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "SELECT entity_code, erp_system, erp_company_code, reporting_currency FROM config.ref_entity_master WHERE entity_code = '@{pipeline().parameters.company_id}' AND is_active = 1;",
+              "type": "Expression"
+            }
+          },
+          "dataset": { "referenceName": "ds_synapse_config", "type": "DatasetReference" }
+        }
+      },
+
+      {
+        "name": "A02_Branch_By_ERP",
+        "description": "Route to the correct extraction activity based on source_system parameter.",
+        "type": "Switch",
+        "dependsOn": [{ "activity": "A01_Resolve_ERP_Config", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "on": {
+            "value": "@pipeline().parameters.source_system",
+            "type": "Expression"
+          },
+          "cases": [
+
+            {
+              "value": "KULCS_SOFT",
+              "activities": [
+                {
+                  "name": "Extract_KulcsSoft",
+                  "description": "Trigger Kulcs-Soft CSV export via SFTP or shared folder pickup. Kulcs-Soft exports: főkönyvi kivonat (GL summary) and naplóbejegyzések (journal lines).",
+                  "type": "Copy",
+                  "typeProperties": {
+                    "source": {
+                      "type": "SftpSource",
+                      "recursive": false,
+                      "modifiedDatetimeStart": {
+                        "value": "@formatDateTime(adddays(utcnow(), -1), 'yyyy-MM-dd')",
+                        "type": "Expression"
+                      }
+                    },
+                    "sink": {
+                      "type": "AzureBlobFSSink",
+                      "copyBehavior": "PreserveHierarchy"
+                    },
+                    "enableStaging": false,
+                    "translator": { "type": "TabularTranslator", "typeConversion": true }
+                  },
+                  "inputs":  [{ "referenceName": "ds_sftp_erp_source",        "type": "DatasetReference" }],
+                  "outputs": [{ "referenceName": "ds_adls_bronze_landing",     "type": "DatasetReference" }],
+                  "policy": { "timeout": "00:45:00", "retry": 2, "retryIntervalInSeconds": 120 }
+                }
+              ]
+            },
+
+            {
+              "value": "COBALT",
+              "activities": [
+                {
+                  "name": "Extract_Cobalt",
+                  "description": "Pull COBALT GL export CSV via REST API or shared ADLS drop zone. COBALT uses UTF-8 CSV with semicolon delimiter.",
+                  "type": "Copy",
+                  "typeProperties": {
+                    "source": {
+                      "type": "RestSource",
+                      "httpRequestTimeout": "00:10:00",
+                      "requestInterval": "00.00:00:00.010",
+                      "requestMethod": "GET"
+                    },
+                    "sink": {
+                      "type": "AzureBlobFSSink",
+                      "copyBehavior": "PreserveHierarchy"
+                    },
+                    "enableStaging": false
+                  },
+                  "inputs":  [{ "referenceName": "ds_rest_cobalt_api",         "type": "DatasetReference" }],
+                  "outputs": [{ "referenceName": "ds_adls_bronze_landing",     "type": "DatasetReference" }],
+                  "policy": { "timeout": "00:30:00", "retry": 2, "retryIntervalInSeconds": 60 }
+                }
+              ]
+            },
+
+            {
+              "value": "SZAMLAZZ",
+              "activities": [
+                {
+                  "name": "Extract_Szamlazz",
+                  "description": "Pull Számlázz.hu invoice export via their XML/CSV API. Only invoice-level data; no full GL — requires post-processing mapping to GL entries.",
+                  "type": "Copy",
+                  "typeProperties": {
+                    "source": {
+                      "type": "RestSource",
+                      "httpRequestTimeout": "00:15:00",
+                      "requestMethod": "POST",
+                      "requestBody": {
+                        "value": "{\"action\": \"xmlagentxmlfoglalo\", \"felhasznalo\": \"@{activity('A01_Resolve_ERP_Config').output.firstRow.erp_company_code}\", \"evtol\": \"@{pipeline().parameters.period_year}\", \"evtol_ho\": \"@{pipeline().parameters.period_month}\"}",
+                        "type": "Expression"
+                      }
+                    },
+                    "sink": {
+                      "type": "AzureBlobFSSink"
+                    }
+                  },
+                  "inputs":  [{ "referenceName": "ds_rest_szamlazz_api",       "type": "DatasetReference" }],
+                  "outputs": [{ "referenceName": "ds_adls_bronze_landing",     "type": "DatasetReference" }],
+                  "policy": { "timeout": "00:20:00", "retry": 3, "retryIntervalInSeconds": 30 }
+                }
+              ]
+            },
+
+            {
+              "value": "SAP_B1",
+              "activities": [
+                {
+                  "name": "Extract_SAP_B1",
+                  "description": "Pull SAP Business One journal entries via SAP B1 Service Layer REST API (HANA). Extracts JournalEntries endpoint filtered by period.",
+                  "type": "Copy",
+                  "typeProperties": {
+                    "source": {
+                      "type": "RestSource",
+                      "httpRequestTimeout": "00:30:00",
+                      "requestMethod": "GET",
+                      "paginationRules": {
+                        "supportRFC5988": "true",
+                        "AbsoluteUrl": "$['@odata.nextLink']"
+                      }
+                    },
+                    "sink": {
+                      "type": "AzureBlobFSSink"
+                    }
+                  },
+                  "inputs":  [{ "referenceName": "ds_rest_sap_b1_api",         "type": "DatasetReference" }],
+                  "outputs": [{ "referenceName": "ds_adls_bronze_landing",     "type": "DatasetReference" }],
+                  "policy": { "timeout": "01:00:00", "retry": 2, "retryIntervalInSeconds": 180 }
+                }
+              ]
+            },
+
+            {
+              "value": "MANUAL_CSV",
+              "activities": [
+                {
+                  "name": "Validate_Manual_CSV",
+                  "description": "Manual CSV drop — validate that file exists in the expected ADLS upload zone path before accepting. Finance team drops file into adls://bronze-upload/{company_id}/.",
+                  "type": "Validation",
+                  "typeProperties": {
+                    "dataset": { "referenceName": "ds_adls_manual_upload_zone", "type": "DatasetReference" },
+                    "timeout": "02:00:00",
+                    "sleep": 300,
+                    "minimumSize": 512
+                  }
+                },
+                {
+                  "name": "Move_Manual_CSV_To_Bronze",
+                  "type": "Copy",
+                  "dependsOn": [{ "activity": "Validate_Manual_CSV", "dependencyConditions": ["Succeeded"] }],
+                  "typeProperties": {
+                    "source": { "type": "AzureBlobFSSource", "recursive": false },
+                    "sink":   { "type": "AzureBlobFSSink",   "copyBehavior": "PreserveHierarchy" },
+                    "deleteMatchingFiles": true
+                  },
+                  "inputs":  [{ "referenceName": "ds_adls_manual_upload_zone",  "type": "DatasetReference" }],
+                  "outputs": [{ "referenceName": "ds_adls_bronze_landing",       "type": "DatasetReference" }],
+                  "policy": { "timeout": "00:30:00", "retry": 1 }
+                }
+              ]
+            }
+
+          ],
+
+          "defaultActivities": [
+            {
+              "name": "Unknown_ERP_Fail",
+              "description": "Unknown source_system — fail loudly so it is not silently ignored.",
+              "type": "Fail",
+              "typeProperties": {
+                "message": {
+                  "value": "Unknown source_system: @{pipeline().parameters.source_system}. Supported: KULCS_SOFT | COBALT | SZAMLAZZ | SAP_B1 | MANUAL_CSV",
+                  "type": "Expression"
+                },
+                "errorCode": "ERR_UNKNOWN_ERP"
+              }
+            }
+          ]
+        }
+      },
+
+{
+        "name": "A03_Register_In_Manifest",
+        "type": "Lookup",
+        "dependsOn": [{ "activity": "A02_Branch_By_ERP", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "@concat('INSERT INTO bronze.ingestion_manifest (entity_id, source_system, source_file_name, source_file_path, source_file_format, period_id_detected, received_at, processing_status, batch_id) SELECT entity_id, ''', pipeline().parameters.source_system, ''', ''', pipeline().parameters.company_id, '_', pipeline().parameters.period_year, formatNumber(pipeline().parameters.period_month, '00'), '.csv'', ''abfss://bronze@fipprodadls.dfs.core.windows.net/', pipeline().parameters.company_id, '/', pipeline().parameters.period_year, '/', formatNumber(pipeline().parameters.period_month, '00'), '/', ''', ''CSV'', ', add(mul(pipeline().parameters.period_year, 100), pipeline().parameters.period_month), ', GETUTCDATE(), ''PENDING'', ''', pipeline().parameters.batch_id, ''' FROM config.ref_entity_master WHERE entity_code = ''', pipeline().parameters.company_id, '''; SELECT 1 AS registered;')",
+              "type": "Expression"
+            }
+          },
+          "dataset": { "referenceName": "ds_synapse_audit", "type": "DatasetReference" }
+        }
+      }
+    ]
+  }
+      },
+        {
+        "name": "A04_Set_Extraction_Complete",
+        "description": "Mark extraction status as COMPLETED in pipeline variable for parent pipeline tracking.",
+        "type": "SetVariable",
+        "dependsOn": [{ "activity": "A03_Register_In_Manifest", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "variableName": "extraction_status",
+          "value": "COMPLETED"
+        }
+      }
+
+    ]
+  }
+}

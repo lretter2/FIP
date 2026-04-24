@@ -1,0 +1,26 @@
+{
+  "name": "ls_rest_cobalt",
+  "description": "REST linked service for COBALT ERP API. Uses OAuth2 client credentials flow. Base URL and API key stored in Azure Key Vault. Used by ds_rest_cobalt_api dataset.",
+  "properties": {
+    "type": "RestService",
+    "typeProperties": {
+      "url": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "cobalt-api-base-url"
+      },
+      "enableServerCertificateValidation": true,
+      "authenticationType": "Anonymous",
+      "httpHeaders": {
+        "X-Api-Key": {
+          "type": "AzureKeyVaultSecret",
+          "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+          "secretName": "cobalt-api-key"
+        },
+        "Content-Type": "application/json",
+        "Accept": "text/csv"
+      }
+    },
+    "annotations": ["erp", "cobalt", "rest", "source"]
+  }
+}

@@ -1,0 +1,114 @@
+version: 1
+
+##############################################################################
+#  Staging Layer — Schema, Sources, and Data Tests
+#  Financial Intelligence Platform · HU GAAP
+##############################################################################
+
+sources:
+  - name: bronze
+    description: >
+      Immutable raw landing zone. Data arrives from ERP systems via ADF
+      ingestion pipelines. Tables are append-only and never modified.
+    schema: bronze
+    tables:
+      - name: raw_gl_transactions
+        description: "Raw GL posting lines from source ERP systems (Kulcs-Soft, COBALT, SAP, etc.)"
+        columns:
+          - name: transaction_id
+            tests: [not_null]
+          - name: company_id
+            tests: [not_null]
+          - name: local_account_code
+            tests: [not_null]
+          - name: posting_date
+            tests: [not_null]
+          - name: batch_id
+            tests: [not_null]
+
+      - name: raw_balance_sheet
+        description: "Period-end balance sheet snapshots from ERP"
+        columns:
+          - name: company_id
+            tests: [not_null]
+          - name: period_year
+            tests: [not_null]
+          - name: period_month
+            tests: [not_null, {accepted_values: {values: [1,2,3,4,5,6,7,8,9,10,11,12]}}]
+          - name: local_account_code
+            tests: [not_null]
+
+      - name: raw_budget
+        description: "Monthly budget and forecast data uploaded by Finance team"
+        columns:
+          - name: company_id
+            tests: [not_null]
+          - name: local_account_code
+            tests: [not_null]
+          - name: budget_version
+            tests: [not_null]
+
+models:
+  - name: stg_gl_transactions
+    description: >
+      Cleaned and typed GL transaction staging layer. Adds late entry flag,
+      duplicate fingerprint hash, and referential integrity quality flags.
+      No business logic or CoA mapping applied here.
+    columns:
+      - name: transaction_id
+        description: "Source ERP transaction identifier"
+        tests: [not_null]
+      - name: company_id
+        description: "Legal entity identifier"
+        tests: [not_null]
+      - name: local_account_code
+        description: "Raw HU GAAP account code from source CoA"
+        tests: [not_null]
+      - name: posting_date
+        description: "Date the GL posting was recorded"
+        tests: [not_null]
+      - name: net_amount_lcy
+        description: "Net amount in HUF: debit_lcy - credit_lcy"
+        tests: [not_null]
+      - name: gaap_basis
+        description: "Always HU_GAAP — single standard architecture"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["HU_GAAP"]
+      - name: row_hash
+        description: "SHA-256 fingerprint for duplicate detection"
+        tests: [not_null, unique]
+
+  - name: stg_balance_sheet
+    description: >
+      Cleaned balance sheet snapshot staging layer.
+      Derives HU GAAP account class from account code prefix.
+    columns:
+      - name: company_id
+        tests: [not_null]
+      - name: period_key
+        description: "YYYYMM integer period key"
+        tests: [not_null]
+      - name: local_account_code
+        tests: [not_null]
+      - name: closing_balance_lcy
+        tests: [not_null]
+
+  - name: stg_budget
+    description: >
+      Cleaned budget and forecast staging layer.
+      Normalises budget_version to ORIGINAL_BUDGET / REVISED_BUDGET / ROLLING_FORECAST.
+    columns:
+      - name: company_id
+        tests: [not_null]
+      - name: period_key
+        tests: [not_null]
+      - name: local_account_code
+        tests: [not_null]
+      - name: budget_version
+        tests:
+          - accepted_values:
+              values: ["ORIGINAL_BUDGET", "REVISED_BUDGET", "ROLLING_FORECAST"]
+      - name: budget_amount_lcy
+        tests: [not_null]

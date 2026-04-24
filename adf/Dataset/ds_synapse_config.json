@@ -1,0 +1,13 @@
+{
+  "name": "ds_synapse_config",
+  "description": "Azure Synapse Analytics dataset pointing at the config schema. Used by pipeline activities that look up entity master data and reference tables.",
+  "properties": {
+    "linkedServiceName": { "referenceName": "ls_synapse_sql_pool", "type": "LinkedServiceReference" },
+    "type": "AzureSqlDWTable",
+    "typeProperties": {
+      "schema": "config",
+      "table":  "ref_entity_master"
+    },
+    "annotations": ["config", "read-only-in-pipelines"]
+  }
+}

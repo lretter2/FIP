@@ -1,0 +1,221 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "name": "pl_monthly_close",
+  "properties": {
+    "description": "Monthly close orchestration in intended order: Silver -> Gold -> Commentary -> Anomaly -> Commentary Publish (formal close) -> RLS Sync -> Power BI Refresh.",
+    "activities": [
+      {
+        "name": "A01_ERP_Extract",
+        "type": "ExecutePipeline",
+        "typeProperties": {
+          "pipeline": { "referenceName": "pl_erp_extract", "type": "PipelineReference" },
+          "waitOnCompletion": true,
+          "parameters": {
+            "company_id": "@pipeline().parameters.company_id",
+            "period_year": "@pipeline().parameters.period_year",
+            "period_month": "@pipeline().parameters.period_month",
+            "source_system": "@pipeline().parameters.source_system"
+          }
+        }
+      },
+      {
+        "name": "A02_Bronze_Landing_Check",
+        "type": "Validation",
+        "dependsOn": [{ "activity": "A01_ERP_Extract", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "dataset": { "referenceName": "ds_bronze_landing_folder", "type": "DatasetReference" },
+          "timeout": "00:30:00",
+          "sleep": 60,
+          "minimumSize": 1024
+        }
+      },
+      {
+        "name": "A03_Log_Batch_Start",
+        "type": "Lookup",
+        "dependsOn": [{ "activity": "A02_Bronze_Landing_Check", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "INSERT INTO audit.batch_log (batch_id, entity_id, period_id, fiscal_year, pipeline_run_id, pipeline_name, source_system, pipeline_stage, status, started_at) SELECT '@{pipeline().parameters.batch_id}', entity_id, @{pipeline().parameters.period_year} * 100 + @{pipeline().parameters.period_month}, @{pipeline().parameters.period_year}, '@{pipeline().RunId}', 'pl_monthly_close', '@{pipeline().parameters.source_system}', 'EXTRACTION', 'RUNNING', GETUTCDATE() FROM config.ref_entity_master WHERE entity_code = '@{pipeline().parameters.company_id}'; SELECT 1 AS batch_log_id;",
+              "type": "Expression"
+            }
+          },
+          "dataset": { "referenceName": "ds_synapse_audit", "type": "DatasetReference" }
+        }
+      },
+      {
+        "name": "A04_DQ_Validation",
+        "type": "ExecutePipeline",
+        "dependsOn": [{ "activity": "A03_Log_Batch_Start", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pipeline": { "referenceName": "pl_dq_validation", "type": "PipelineReference" },
+          "waitOnCompletion": true,
+          "parameters": {
+            "batch_id": "@pipeline().parameters.batch_id",
+            "company_id": "@pipeline().parameters.company_id"
+          }
+        }
+      },
+      {
+        "name": "A05_DQ_Gate",
+        "type": "IfCondition",
+        "dependsOn": [{ "activity": "A04_DQ_Validation", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(activity('A04_DQ_Validation').output.pipelineReturnValue.critical_failures, 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "A05_DQ_Passed_Log",
+              "type": "SetVariable",
+              "typeProperties": { "variableName": "dq_status", "value": "PASSED" }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "A05_DQ_Failed_Halt",
+              "type": "Fail",
+              "typeProperties": {
+                "message": "Critical DQ failure: Debit/Credit balance check failed. Pipeline halted.",
+                "errorCode": "DQ_ERR_001"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "A06_NBH_FX_Rate_Fetch",
+        "type": "WebActivity",
+        "dependsOn": [{ "activity": "A05_DQ_Gate", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "url": {
+            "value": "@concat('https://www.mnb.hu/arfolyamok/api/rates?startDate=', formatDateTime(pipeline().parameters.close_date, 'yyyy-MM-dd'), '&endDate=', formatDateTime(pipeline().parameters.close_date, 'yyyy-MM-dd'))",
+            "type": "Expression"
+          },
+          "method": "GET"
+        }
+      },
+      {
+        "name": "A07_dbt_Silver_Run",
+        "type": "DatabricksSparkPython",
+        "dependsOn": [{ "activity": "A06_NBH_FX_Rate_Fetch", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pythonFile": "dbfs:/fip/scripts/run_dbt.py",
+          "parameters": [
+            "--select", "staging intermediate",
+            "--vars", { "value": "@concat('{\"batch_id\":\"', pipeline().parameters.batch_id, '\",\"entity_code\":\"', pipeline().parameters.company_id, '\"}')", "type": "Expression" }
+          ]
+        }
+      },
+      {
+        "name": "A08_dbt_Gold_Run",
+        "type": "DatabricksSparkPython",
+        "dependsOn": [{ "activity": "A07_dbt_Silver_Run", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pythonFile": "dbfs:/fip/scripts/run_dbt.py",
+          "parameters": [
+            "--select", "gold",
+            "--vars", { "value": "@concat('{\"batch_id\":\"', pipeline().parameters.batch_id, '\",\"entity_code\":\"', pipeline().parameters.company_id, '\"}')", "type": "Expression" }
+          ]
+        }
+      },
+      {
+        "name": "A09_AI_Commentary_Generate",
+        "type": "DatabricksSparkPython",
+        "dependsOn": [{ "activity": "A08_dbt_Gold_Run", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pythonFile": "dbfs:/fip/scripts/commentary_generator.py",
+          "parameters": [
+            "--entity_code", "@pipeline().parameters.company_id",
+            "--period_key", { "value": "@string(add(mul(pipeline().parameters.period_year, 100), pipeline().parameters.period_month))", "type": "Expression" },
+            "--roles", "CFO,CEO,BOARD,INVESTOR",
+            "--languages", "hu,en"
+          ]
+        }
+      },
+      {
+        "name": "A10_Anomaly_Detection",
+        "type": "DatabricksSparkPython",
+        "dependsOn": [{ "activity": "A09_AI_Commentary_Generate", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pythonFile": "dbfs:/fip/scripts/anomaly_detector.py",
+          "parameters": [
+            "--entity_code", "@pipeline().parameters.company_id",
+            "--period_key", { "value": "@string(add(mul(pipeline().parameters.period_year, 100), pipeline().parameters.period_month))", "type": "Expression" }
+          ]
+        }
+      },
+      {
+        "name": "A11_Commentary_Publish_Close",
+        "type": "Lookup",
+        "dependsOn": [{ "activity": "A10_Anomaly_Detection", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "CALL audit.proc_publish_commentary_queue_to_gold(@{pipeline().parameters.period_year} * 100 + @{pipeline().parameters.period_month}, (SELECT entity_id FROM config.ref_entity_master WHERE entity_code = '@{pipeline().parameters.company_id}')); SELECT 1 AS published;",
+              "type": "Expression"
+            }
+          },
+          "dataset": { "referenceName": "ds_synapse_audit", "type": "DatasetReference" }
+        }
+      },
+      {
+        "name": "A12_RLS_Sync",
+        "type": "ExecutePipeline",
+        "dependsOn": [{ "activity": "A11_Commentary_Publish_Close", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pipeline": { "referenceName": "pl_rls_sync_adf_pipeline", "type": "PipelineReference" },
+          "waitOnCompletion": true,
+          "parameters": {
+            "environment": "@pipeline().parameters.source_system"
+          }
+        }
+      },
+      {
+        "name": "A13_PowerBI_Refresh",
+        "type": "WebActivity",
+        "dependsOn": [{ "activity": "A12_RLS_Sync", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "url": {
+            "value": "@concat('https://api.powerbi.com/v1.0/myorg/groups/', variables('pbi_workspace_id'), '/datasets/', variables('pbi_dataset_id'), '/refreshes')",
+            "type": "Expression"
+          },
+          "method": "POST",
+          "authentication": { "type": "MSI", "resource": "https://analysis.windows.net/powerbi/api" },
+          "body": "{ \"notifyOption\": \"MailOnFailure\" }"
+        }
+      },
+      {
+        "name": "A14_Log_Batch_Complete",
+        "type": "Lookup",
+        "dependsOn": [{ "activity": "A13_PowerBI_Refresh", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "UPDATE audit.batch_log SET status='PASSED', pipeline_stage='COMPLETE', completed_at=GETUTCDATE() WHERE batch_id='@{pipeline().parameters.batch_id}'; SELECT 1 AS result;",
+              "type": "Expression"
+            }
+          },
+          "dataset": { "referenceName": "ds_synapse_audit", "type": "DatasetReference" }
+        }
+      }
+    ],
+    "parameters": {
+      "company_id": { "type": "string" },
+      "period_year": { "type": "int" },
+      "period_month": { "type": "int" },
+      "close_date": { "type": "string" },
+      "source_system": { "type": "string" },
+      "batch_id": { "type": "string" }
+    },
+    "variables": {
+      "dq_status": { "type": "String", "defaultValue": "PENDING" },
+      "pbi_workspace_id": { "type": "String" },
+      "pbi_dataset_id": { "type": "String" }
+    }
+  }
+}

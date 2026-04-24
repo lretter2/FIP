@@ -1,0 +1,36 @@
+{
+  "name": "ls_rest_sap_b1",
+  "description": "REST linked service for SAP Business One Service Layer API (HANA). Uses session-based authentication with B1SESSION cookie. Host URL and credentials stored in Azure Key Vault.",
+  "properties": {
+    "type": "RestService",
+    "typeProperties": {
+      "url": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "sap-b1-service-layer-url"
+      },
+      "enableServerCertificateValidation": true,
+      "authenticationType": "Basic",
+      "userName": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "sap-b1-username"
+      },
+      "password": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "sap-b1-password"
+      },
+      "httpHeaders": {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "B1-CompanyDB": {
+          "type": "AzureKeyVaultSecret",
+          "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+          "secretName": "sap-b1-company-db"
+        }
+      }
+    },
+    "annotations": ["erp", "sap", "sap-b1", "rest", "source", "hana"]
+  }
+}

@@ -1,0 +1,61 @@
+company_id,local_account_code,local_account_name,universal_node,account_type,normal_balance,l1_category,l2_subcategory,l3_detail,pl_line_item,cf_classification,is_controlling,is_intercompany
+DEFAULT,11,Immateriális javak,ASSET.NONCURRENT.INTANGIBLE.SOFTWARE,Asset,D,Asset,Non-current,Intangible,,Investing,FALSE,FALSE
+DEFAULT,12,Ingatlanok és kapcsolódó vagyoni értékű jogok,ASSET.NONCURRENT.PPE.LAND_BUILDINGS,Asset,D,Asset,Non-current,PPE,,Investing,FALSE,FALSE
+DEFAULT,13,Műszaki berendezések gépek,ASSET.NONCURRENT.PPE.MACHINERY,Asset,D,Asset,Non-current,PPE,,Investing,FALSE,FALSE
+DEFAULT,14,Egyéb berendezések felszerelések,ASSET.NONCURRENT.PPE.EQUIPMENT,Asset,D,Asset,Non-current,PPE,,Investing,FALSE,FALSE
+DEFAULT,16,Tenyészállatok,ASSET.NONCURRENT.PPE.BIOLOGICAL,Asset,D,Asset,Non-current,PPE,,Investing,FALSE,FALSE
+DEFAULT,17,Beruházások felújítások,ASSET.NONCURRENT.PPE.CAPEX_WIP,Asset,D,Asset,Non-current,PPE,,Investing,FALSE,FALSE
+DEFAULT,18,Beruházásokra adott előlegek,ASSET.NONCURRENT.PPE.ADVANCES,Asset,D,Asset,Non-current,PPE,,Investing,FALSE,FALSE
+DEFAULT,19,Értékcsökkentés (immateriális + tárgyi),ASSET.NONCURRENT.ACCUMULATED_DEPRECIATION,Asset,C,Asset,Non-current,Depreciation,DA,,FALSE,FALSE
+DEFAULT,21,Részesedések kapcsolt vállalkozásban,ASSET.NONCURRENT.FINANCIAL.EQUITY_INVESTMENTS,Asset,D,Asset,Non-current,Financial,,Investing,FALSE,TRUE
+DEFAULT,22,Kölcsönök kapcsolt vállalkozásnak,ASSET.NONCURRENT.FINANCIAL.LOANS_IC,Asset,D,Asset,Non-current,Financial,,Investing,FALSE,TRUE
+DEFAULT,23,Egyéb részesedések,ASSET.NONCURRENT.FINANCIAL.EQUITY_OTHER,Asset,D,Asset,Non-current,Financial,,Investing,FALSE,FALSE
+DEFAULT,27,Hosszú lejáratú bankbetétek,ASSET.NONCURRENT.FINANCIAL.DEPOSITS,Asset,D,Asset,Non-current,Financial,,Investing,FALSE,FALSE
+DEFAULT,28,Értékpapírok (befektetett),ASSET.NONCURRENT.FINANCIAL.SECURITIES,Asset,D,Asset,Non-current,Financial,,Investing,FALSE,FALSE
+DEFAULT,2111,Befejezetlen termelés,ASSET.CURRENT.INVENTORY.WIP,Asset,D,Asset,Current,Inventory,,Operating,FALSE,FALSE
+DEFAULT,2112,Félkész termékek,ASSET.CURRENT.INVENTORY.SEMI_FINISHED,Asset,D,Asset,Current,Inventory,,Operating,FALSE,FALSE
+DEFAULT,212,Késztermékek,ASSET.CURRENT.INVENTORY.FINISHED_GOODS,Asset,D,Asset,Current,Inventory,,Operating,FALSE,FALSE
+DEFAULT,213,Állatok,ASSET.CURRENT.INVENTORY.LIVESTOCK,Asset,D,Asset,Current,Inventory,,Operating,FALSE,FALSE
+DEFAULT,214,Áruk,ASSET.CURRENT.INVENTORY.MERCHANDISE,Asset,D,Asset,Current,Inventory,,Operating,FALSE,FALSE
+DEFAULT,215,Göngyölegek,ASSET.CURRENT.INVENTORY.PACKAGING,Asset,D,Asset,Current,Inventory,,Operating,FALSE,FALSE
+DEFAULT,216,Készletekre adott előlegek,ASSET.CURRENT.INVENTORY.ADVANCES,Asset,D,Asset,Current,Inventory,,Operating,FALSE,FALSE
+DEFAULT,311,Vevők,ASSET.CURRENT.RECEIVABLES.TRADE,Asset,D,Asset,Current,Receivables,,Operating,FALSE,FALSE
+DEFAULT,314,Kapcsolt vállalkozással szembeni követelések,ASSET.CURRENT.RECEIVABLES.INTERCOMPANY,Asset,D,Asset,Current,Receivables,,Operating,FALSE,TRUE
+DEFAULT,317,Egyéb rövid lejáratú követelések,ASSET.CURRENT.RECEIVABLES.OTHER,Asset,D,Asset,Current,Receivables,,Operating,FALSE,FALSE
+DEFAULT,321,Részvények és részesedések,ASSET.CURRENT.SECURITIES.EQUITY,Asset,D,Asset,Current,Securities,,Investing,FALSE,FALSE
+DEFAULT,381,Pénztár és csekkek,ASSET.CURRENT.CASH.PETTY_CASH,Asset,D,Asset,Current,Cash,,Operating,FALSE,FALSE
+DEFAULT,382,Bankszámlák,ASSET.CURRENT.CASH.BANK,Asset,D,Asset,Current,Cash,,Operating,FALSE,FALSE
+DEFAULT,389,Egyéb pénzeszközök,ASSET.CURRENT.CASH.OTHER,Asset,D,Asset,Current,Cash,,Operating,FALSE,FALSE
+DEFAULT,391,Aktív időbeli elhatárolások,ASSET.CURRENT.PREPAYMENTS,Asset,D,Asset,Current,Prepayments,,Operating,FALSE,FALSE
+DEFAULT,411,Jegyzett tőke,EQUITY.SHARE_CAPITAL,Equity,C,Equity,Share Capital,,,Financing,FALSE,FALSE
+DEFAULT,412,Tőketartalék,EQUITY.SHARE_PREMIUM,Equity,C,Equity,Share Premium,,,Financing,FALSE,FALSE
+DEFAULT,413,Eredménytartalék,EQUITY.RETAINED_EARNINGS,Equity,C,Equity,Retained Earnings,,,Financing,FALSE,FALSE
+DEFAULT,414,Lekötött tartalék,EQUITY.STATUTORY_RESERVE,Equity,C,Equity,Statutory Reserve,,,Financing,FALSE,FALSE
+DEFAULT,419,Mérleg szerinti eredmény,EQUITY.CURRENT_YEAR_PROFIT,Equity,C,Equity,Current Year Profit,,,Financing,FALSE,FALSE
+DEFAULT,421,Céltartalékok,LIABILITY.PROVISIONS,Liability,C,Liability,Provisions,,,Operating,FALSE,FALSE
+DEFAULT,431,Hátrasorolt kötelezettségek,LIABILITY.NONCURRENT.SUBORDINATED,Liability,C,Liability,Non-current,Subordinated Debt,,Financing,FALSE,FALSE
+DEFAULT,432,Hosszú lejáratú hitelek,LIABILITY.NONCURRENT.DEBT.LOANS,Liability,C,Liability,Non-current,Long-term Loans,,Financing,FALSE,FALSE
+DEFAULT,433,Átváltoztatható kötvények,LIABILITY.NONCURRENT.DEBT.BONDS,Liability,C,Liability,Non-current,Bonds,,Financing,FALSE,FALSE
+DEFAULT,441,Rövid lejáratú hitelek,LIABILITY.CURRENT.DEBT.LOANS,Liability,C,Liability,Current,Short-term Loans,,Financing,FALSE,FALSE
+DEFAULT,454,Szállítók,LIABILITY.CURRENT.PAYABLES.TRADE,Liability,C,Liability,Current,Trade Payables,,Operating,FALSE,FALSE
+DEFAULT,455,Kapcsolt vállalkozással szembeni kötelezettségek,LIABILITY.CURRENT.PAYABLES.INTERCOMPANY,Liability,C,Liability,Current,Intercompany Payables,,Operating,FALSE,TRUE
+DEFAULT,462,Munkavállalókkal szembeni kötelezettségek,LIABILITY.CURRENT.PAYABLES.PAYROLL,Liability,C,Liability,Current,Payroll,,Operating,FALSE,FALSE
+DEFAULT,463,Társadalombiztosítási kötelezettségek,LIABILITY.CURRENT.PAYABLES.SOCIAL_SECURITY,Liability,C,Liability,Current,Social Security,,Operating,FALSE,FALSE
+DEFAULT,467,Egyéb rövid lejáratú kötelezettségek,LIABILITY.CURRENT.OTHER,Liability,C,Liability,Current,Other,,Operating,FALSE,FALSE
+DEFAULT,482,Passzív időbeli elhatárolások,LIABILITY.CURRENT.ACCRUALS,Liability,C,Liability,Current,Accruals,,Operating,FALSE,FALSE
+DEFAULT,51,Anyagköltség,COGS.MATERIALS,Expense,D,COGS,Materials,,,Operating,TRUE,FALSE
+DEFAULT,52,Igénybe vett szolgáltatások,COGS.SERVICES,Expense,D,COGS,Services,,,Operating,TRUE,FALSE
+DEFAULT,53,Egyéb szolgáltatások,OPEX.OTHER_SERVICES,Expense,D,OPEX,Other Services,,,Operating,FALSE,FALSE
+DEFAULT,54,Eladott áruk beszerzési értéke (ELÁBÉ),COGS.PURCHASE_COST,Expense,D,COGS,Purchase Cost,,,Operating,TRUE,FALSE
+DEFAULT,55,Eladott (közvetített) szolgáltatások értéke,COGS.RESOLD_SERVICES,Expense,D,COGS,Resold Services,,,Operating,TRUE,FALSE
+DEFAULT,56,Személyi jellegű ráfordítások,OPEX.PERSONNEL,Expense,D,OPEX,Personnel,,,Operating,TRUE,FALSE
+DEFAULT,57,Értékcsökkentési leírás,OPEX.DEPRECIATION,Expense,D,OPEX,Depreciation,DA,Operating,TRUE,FALSE
+DEFAULT,58,Egyéb ráfordítások,OPEX.OTHER,Expense,D,OPEX,Other,,,Operating,FALSE,FALSE
+DEFAULT,861,Pénzügyi ráfordítások - kamatfizetés,OPEX.FINANCIAL_EXPENSE.INTEREST,Expense,D,OPEX,Financial Expense,Fin_Expense,Operating,FALSE,FALSE
+DEFAULT,862,Pénzügyi ráfordítások - árfolyamveszteség,OPEX.FINANCIAL_EXPENSE.FX_LOSS,Expense,D,OPEX,Financial Expense,Fin_Expense,Operating,FALSE,FALSE
+DEFAULT,971,Értékesítés nettó árbevétele,REVENUE.SALES,Revenue,C,Revenue,Net Sales,,,Operating,TRUE,FALSE
+DEFAULT,972,Aktivált saját teljesítmények értéke,REVENUE.OWN_WORK,Revenue,C,Revenue,Own Work Capitalized,,,Operating,FALSE,FALSE
+DEFAULT,973,Egyéb bevételek,REVENUE.OTHER,Revenue,C,Revenue,Other Revenue,,,Operating,FALSE,FALSE
+DEFAULT,974,Pénzügyi bevételek - kamatbevétel,REVENUE.FINANCIAL.INTEREST,Revenue,C,Revenue,Financial Income,Fin_Income,Operating,FALSE,FALSE
+DEFAULT,975,Pénzügyi bevételek - árfolyamnyereség,REVENUE.FINANCIAL.FX_GAIN,Revenue,C,Revenue,Financial Income,Fin_Income,Operating,FALSE,FALSE
+DEFAULT,891,Társasági adó,OPEX.INCOME_TAX,Expense,D,OPEX,Income Tax,Tax,Operating,FALSE,FALSE

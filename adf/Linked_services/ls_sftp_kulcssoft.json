@@ -1,0 +1,33 @@
+{
+  "name": "ls_sftp_kulcssoft",
+  "description": "SFTP connection to Kulcs-Soft ERP export share. Credentials stored in Azure Key Vault. Used by ds_sftp_erp_source dataset for monthly GL CSV pickup.",
+  "properties": {
+    "type": "Sftp",
+    "typeProperties": {
+      "host": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "kulcssoft-sftp-host"
+      },
+      "port": 22,
+      "skipHostKeyValidation": false,
+      "authenticationType": "SshPublicKey",
+      "userName": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "kulcssoft-sftp-username"
+      },
+      "privateKeyPath": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "kulcssoft-sftp-private-key-path"
+      },
+      "privateKeyPassphrase": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "kulcssoft-sftp-passphrase"
+      }
+    },
+    "annotations": ["erp", "kulcssoft", "sftp", "source"]
+  }
+}

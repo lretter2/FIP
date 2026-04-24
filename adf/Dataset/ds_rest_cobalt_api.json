@@ -1,0 +1,77 @@
+{
+  "name": "ds_rest_cobalt_api",
+  "description": "REST dataset for COBALT ERP API. Fetches GL transaction data as CSV via authenticated GET requests. The resource path and query parameters are fully parameterised — entity, period, and pagination offset are all passed at pipeline runtime. Linked service: ls_rest_cobalt. Remediates FINDING A-02.",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_rest_cobalt",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "entity_code": {
+        "type": "String",
+        "description": "COBALT company identifier (maps to entity_code in FIP). Used in the API path segment."
+      },
+      "period_year": {
+        "type": "Int",
+        "description": "Fiscal year of the extract (e.g. 2026)."
+      },
+      "period_month": {
+        "type": "Int",
+        "description": "Fiscal month of the extract, 1–12."
+      },
+      "page_number": {
+        "type": "Int",
+        "description": "Zero-based page number for paginated extraction. ADF ForEach iterates pages until empty response.",
+        "defaultValue": 0
+      },
+      "page_size": {
+        "type": "Int",
+        "description": "Number of records per API page. Default 1000 keeps response payloads manageable.",
+        "defaultValue": 1000
+      }
+    },
+    "type": "RestResource",
+    "typeProperties": {
+      "relativeUrl": {
+        "value": "@{concat('/api/v2/companies/', dataset().entity_code, '/gl-transactions?year=', string(dataset().period_year), '&month=', formatNumber(dataset().period_month, '00'), '&page=', string(dataset().page_number), '&pageSize=', string(dataset().page_size), '&format=csv')}",
+        "type": "Expression"
+      },
+      "requestMethod": "GET",
+      "additionalHeaders": {
+        "Accept": "text/csv",
+        "X-FIP-Source": "azure-data-factory"
+      },
+      "paginationRules": {
+        "AbsoluteUrl": "$.next_page_url"
+      }
+    },
+    "schema": [
+      { "name": "id",                   "type": "String",  "description": "COBALT internal transaction UUID" },
+      { "name": "company_code",         "type": "String",  "description": "COBALT company identifier" },
+      { "name": "account_number",       "type": "String",  "description": "COBALT account number (maps to local_account_code)" },
+      { "name": "account_name",         "type": "String",  "description": "Account description" },
+      { "name": "journal_date",         "type": "String",  "description": "Journal entry date (ISO 8601)" },
+      { "name": "posting_date",         "type": "String",  "description": "GL posting date (ISO 8601)" },
+      { "name": "voucher_number",       "type": "String",  "description": "Source voucher / document number" },
+      { "name": "voucher_type",         "type": "String",  "description": "Transaction type code" },
+      { "name": "debit_huf",            "type": "String",  "description": "Debit amount in HUF" },
+      { "name": "credit_huf",           "type": "String",  "description": "Credit amount in HUF" },
+      { "name": "currency",             "type": "String",  "description": "ISO 4217 currency code" },
+      { "name": "debit_fcy",            "type": "String",  "description": "Debit in original currency" },
+      { "name": "credit_fcy",           "type": "String",  "description": "Credit in original currency" },
+      { "name": "exchange_rate",        "type": "String",  "description": "NBH mid-rate used for conversion" },
+      { "name": "cost_center",          "type": "String",  "description": "Cost centre code (nullable)" },
+      { "name": "project_id",           "type": "String",  "description": "Project identifier (nullable)" },
+      { "name": "narration",            "type": "String",  "description": "Transaction description" },
+      { "name": "is_reversed",          "type": "String",  "description": "Boolean: true if this is a reversal entry" },
+      { "name": "reversal_of_id",       "type": "String",  "description": "UUID of the original entry being reversed (nullable)" },
+      { "name": "fiscal_year",          "type": "String",  "description": "Fiscal year (YYYY)" },
+      { "name": "fiscal_period",        "type": "String",  "description": "Fiscal period (1–12)" },
+      { "name": "cobalt_version",       "type": "String",  "description": "COBALT application version at export time" },
+      { "name": "exported_at",          "type": "String",  "description": "API export timestamp (ISO 8601 UTC)" }
+    ],
+    "annotations": [
+      "erp", "cobalt", "rest", "source", "gl", "bronze"
+    ]
+  }
+}

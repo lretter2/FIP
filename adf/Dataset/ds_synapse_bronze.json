@@ -1,0 +1,13 @@
+{
+  "name": "ds_synapse_bronze",
+  "description": "Azure Synapse Analytics dataset pointing at the bronze schema. Used by DQ validation pipeline activities that read from bronze.raw_gl_transactions.",
+  "properties": {
+    "linkedServiceName": { "referenceName": "ls_synapse_sql_pool", "type": "LinkedServiceReference" },
+    "type": "AzureSqlDWTable",
+    "typeProperties": {
+      "schema": "bronze",
+      "table":  "raw_gl_transactions"
+    },
+    "annotations": ["bronze", "read-only-in-pipelines"]
+  }
+}

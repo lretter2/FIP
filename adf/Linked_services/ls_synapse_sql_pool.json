@@ -1,0 +1,19 @@
+{
+  "name": "ls_synapse_sql_pool",
+  "description": "Azure Synapse Analytics Dedicated SQL Pool linked service. Serving layer for all Gold Zone tables. Authentication via Service Principal stored in Key Vault.",
+  "properties": {
+    "type": "AzureSqlDW",
+    "typeProperties": {
+      "connectionString": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "synapse-connection-string"
+      }
+    },
+    "annotations": ["synapse", "gold", "serving"],
+    "connectVia": {
+      "referenceName": "AutoResolveIntegrationRuntime",
+      "type": "IntegrationRuntimeReference"
+    }
+  }
+}

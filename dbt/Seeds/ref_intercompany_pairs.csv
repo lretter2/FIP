@@ -1,0 +1,7 @@
+entity_id_from,entity_id_to,posting_account_from,posting_account_to,ic_elimination_type,is_active,created_at,created_by,updated_at,updated_by
+10001,10002,4100,7100,SALES_PURCHASE,true,2026-04-10,system,2026-04-10,system
+10001,10003,4110,7110,SALES_PURCHASE,true,2026-04-10,system,2026-04-10,system
+10002,10001,4100,7100,SALES_PURCHASE,true,2026-04-10,system,2026-04-10,system
+10002,10003,4120,7120,SERVICES,true,2026-04-10,system,2026-04-10,system
+10003,10001,4110,7110,SALES_PURCHASE,true,2026-04-10,system,2026-04-10,system
+10003,10002,4120,7120,SERVICES,true,2026-04-10,system,2026-04-10,system

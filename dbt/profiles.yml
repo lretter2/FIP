@@ -1,0 +1,60 @@
+##############################################################################
+#  dbt Connection Profiles
+#  Financial Intelligence Platform — Azure Synapse Analytics
+#
+#  IMPORTANT: Do NOT commit credentials to source control.
+#  Use Azure Key Vault references or environment variables.
+##############################################################################
+
+fip_synapse:
+  target: prod
+  outputs:
+
+    # -------------------------------------------------------------------------
+    # PRODUCTION — Azure Synapse Dedicated SQL Pool
+    # -------------------------------------------------------------------------
+    prod:
+      type: synapse
+      driver: "ODBC Driver 18 for SQL Server"
+      server: "{{ env_var('SYNAPSE_SERVER') }}"           # e.g. fip-prod.sql.azuresynapse.net
+      port: 1433
+      database: "{{ env_var('SYNAPSE_DATABASE') }}"       # e.g. fip_dw
+      schema: dbo
+      authentication: ActiveDirectoryServicePrincipal
+      tenant_id: "{{ env_var('AZURE_TENANT_ID') }}"
+      client_id: "{{ env_var('AZURE_CLIENT_ID') }}"
+      client_secret: "{{ env_var('AZURE_CLIENT_SECRET') }}"
+      threads: 8
+      connect_timeout: 60
+      retries: 3
+
+    # -------------------------------------------------------------------------
+    # DEV — Azure SQL Database (serverless, cheaper for development)
+    # -------------------------------------------------------------------------
+    dev:
+      type: sqlserver
+      driver: "ODBC Driver 18 for SQL Server"
+      server: "{{ env_var('DEV_SQL_SERVER') }}"
+      port: 1433
+      database: "{{ env_var('DEV_SQL_DATABASE') }}"
+      schema: dbo
+      authentication: ActiveDirectoryInteractive
+      tenant_id: "{{ env_var('AZURE_TENANT_ID') }}"
+      threads: 2
+      connect_timeout: 30
+
+    # -------------------------------------------------------------------------
+    # CI — Used by Azure DevOps pipeline for automated testing
+    # -------------------------------------------------------------------------
+    ci:
+      type: sqlserver
+      driver: "ODBC Driver 18 for SQL Server"
+      server: "{{ env_var('CI_SQL_SERVER') }}"
+      port: 1433
+      database: "{{ env_var('CI_SQL_DATABASE') }}"
+      schema: ci_test
+      authentication: ActiveDirectoryServicePrincipal
+      tenant_id: "{{ env_var('AZURE_TENANT_ID') }}"
+      client_id: "{{ env_var('CI_CLIENT_ID') }}"
+      client_secret: "{{ env_var('CI_CLIENT_SECRET') }}"
+      threads: 4

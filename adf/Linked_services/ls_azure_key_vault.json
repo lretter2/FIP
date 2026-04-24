@@ -1,0 +1,15 @@
+{
+  "name": "ls_azure_key_vault",
+  "description": "Azure Key Vault linked service. Root secret store for all credentials used by ADF pipelines. ADF accesses Key Vault via its System-Assigned Managed Identity — no credentials in this file.",
+  "properties": {
+    "type": "AzureKeyVault",
+    "typeProperties": {
+      "baseUrl": "https://fip-prod-kv.vault.azure.net/"
+    },
+    "annotations": ["security", "secrets", "governance"],
+    "connectVia": {
+      "referenceName": "AutoResolveIntegrationRuntime",
+      "type": "IntegrationRuntimeReference"
+    }
+  }
+}

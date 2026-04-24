@@ -1,0 +1,334 @@
+# =============================================================================
+#  Financial Intelligence Platform — Azure DevOps CI/CD Pipeline
+#  Version 1.0 · 2026 · HU GAAP
+#
+#  Stages:
+#    1. validate   — Bicep what-if, dbt compile, Python linting
+#    2. test       — dbt test (CI SQL pool), Python unit tests
+#    3. deploy-dev — Deploy to dev environment (main branch only)
+#    4. deploy-prod — Deploy to prod (manual approval gate required)
+#
+#  Trigger:
+#    - PRs into main: stages 1 + 2 (validate + test)
+#    - Push to main:  stages 1 + 2 + 3 (validate + test + deploy-dev)
+#    - Tag vX.Y.Z:    all stages (full prod release)
+#
+#  Variable groups required (set in Azure DevOps Library):
+#    FIP-CI-Variables  — CI service principal, SQL connection strings
+#    FIP-DEV-Variables — Dev service principal, Key Vault URL
+#    FIP-PROD-Variables — Prod service principal, Key Vault URL (approval locked)
+# =============================================================================
+
+trigger:
+  branches:
+    include:
+      - main
+  tags:
+    include:
+      - "v*"
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: "ubuntu-22.04"
+
+variables:
+  PYTHON_VERSION:  "3.11"
+  DBT_VERSION:     "1.8.0"
+  NODE_VERSION:    "20"
+  BICEP_VERSION:   "0.28.1"
+
+# =============================================================================
+# STAGE 1: VALIDATE
+# =============================================================================
+
+stages:
+
+  - stage: Validate
+    displayName: "Validate — Bicep, dbt compile, linting"
+    jobs:
+
+      - job: BicepValidate
+        displayName: "Bicep: What-if validation"
+        steps:
+          - task: AzureCLI@2
+            displayName: "Install Bicep CLI"
+            inputs:
+              azureSubscription: "fip-ci-service-connection"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                az bicep upgrade
+                az bicep version
+
+          - task: AzureCLI@2
+            displayName: "Bicep build (syntax check)"
+            inputs:
+              azureSubscription: "fip-ci-service-connection"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                az bicep build --file iac/main.bicep
+
+          - task: AzureCLI@2
+            displayName: "Bicep what-if (dev)"
+            inputs:
+              azureSubscription: "fip-ci-service-connection"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                az deployment group what-if \
+                  --resource-group rg-fip-dev \
+                  --template-file iac/main.bicep \
+                  --parameters iac/parameters/dev.bicepparam \
+                               platformSpObjectId=$(CI_PLATFORM_SP_OBJECT_ID) \
+                               dbaGroupObjectId=$(CI_DBA_GROUP_OBJECT_ID) \
+                               powerBiSpObjectId=$(CI_POWERBI_SP_OBJECT_ID) \
+                               tenantId=$(AZURE_TENANT_ID)
+
+      - job: DbtCompile
+        displayName: "dbt: compile + deps check"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "$(PYTHON_VERSION)"
+
+          - script: |
+              pip install dbt-synapse==$(DBT_VERSION) --quiet
+              cd financial_dbt
+              dbt deps
+              dbt compile --target ci \
+                --vars '{"gaap_basis": "HU_GAAP", "reporting_currency": "HUF"}'
+            displayName: "dbt deps + compile"
+            env:
+              CI_SQL_SERVER:     $(CI_SQL_SERVER)
+              CI_SQL_DATABASE:   $(CI_SQL_DATABASE)
+              AZURE_TENANT_ID:   $(AZURE_TENANT_ID)
+              CI_CLIENT_ID:      $(CI_CLIENT_ID)
+              CI_CLIENT_SECRET:  $(CI_CLIENT_SECRET)
+
+      - job: PythonLint
+        displayName: "Python: flake8 + mypy + Data Dictionary"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "$(PYTHON_VERSION)"
+
+          - script: |
+              pip install flake8 mypy openpyxl pyyaml --quiet
+              flake8 python/ --max-line-length=120 --ignore=E501,W503
+              mypy python/ --ignore-missing-imports --no-strict-optional
+            displayName: "Lint Python scripts"
+
+          - script: |
+              python3 python/tools/generate_data_dictionary.py
+            displayName: "Generate Authoritative Data Dictionary"
+
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish Data Dictionary"
+            inputs:
+              targetPath: "$(Build.SourcesDirectory)/FIP_Data_Dictionary.xlsx"
+              artifactName: "DataDictionary"
+              publishLocation: "pipeline"
+
+# =============================================================================
+# STAGE 2: TEST
+# =============================================================================
+
+  - stage: Test
+    displayName: "Test — dbt tests, Python unit tests"
+    dependsOn: Validate
+    condition: succeeded()
+    variables:
+      - group: FIP-CI-Variables
+    jobs:
+
+      - job: DbtTest
+        displayName: "dbt: schema + data tests on CI SQL pool"
+        timeoutInMinutes: 30
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "$(PYTHON_VERSION)"
+
+          - script: |
+              pip install dbt-synapse==$(DBT_VERSION) --quiet
+              cd financial_dbt
+              dbt deps
+              # Run staging and intermediate models + all tests
+              dbt run --target ci --select staging intermediate
+              dbt test --target ci --select staging intermediate
+              # Run marts (finance only — analytics KPIs need full history)
+              dbt run --target ci --select marts.finance
+              dbt test --target ci --select marts.finance
+            displayName: "dbt run + test (CI)"
+            env:
+              CI_SQL_SERVER:     $(CI_SQL_SERVER)
+              CI_SQL_DATABASE:   $(CI_SQL_DATABASE)
+              AZURE_TENANT_ID:   $(AZURE_TENANT_ID)
+              CI_CLIENT_ID:      $(CI_CLIENT_ID)
+              CI_CLIENT_SECRET:  $(CI_CLIENT_SECRET)
+
+          - task: PublishTestResults@2
+            condition: always()
+            inputs:
+              testResultsFormat: "JUnit"
+              testResultsFiles: "financial_dbt/target/dbt_test_results.xml"
+              testRunTitle: "dbt Tests"
+
+      - job: PythonUnitTests
+        displayName: "Python: pytest unit tests"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "$(PYTHON_VERSION)"
+
+          - script: |
+              pip install -r python/requirements.txt --quiet
+              pytest python/ \
+                --ignore=python/forecasting \
+                -v \
+                --junitxml=pytest-results.xml \
+                --cov=python \
+                --cov-report=xml:coverage.xml
+            displayName: "Run pytest"
+            env:
+              SYNAPSE_CONNECTION_STRING: $(CI_SYNAPSE_CONNECTION_STRING)
+              AZURE_OPENAI_ENDPOINT:     $(CI_OPENAI_ENDPOINT)
+              AZURE_OPENAI_DEPLOYMENT:   "gpt-4o"
+
+          - task: PublishTestResults@2
+            condition: always()
+            inputs:
+              testResultsFormat: "JUnit"
+              testResultsFiles: "pytest-results.xml"
+              testRunTitle: "Python Unit Tests"
+
+          - task: PublishCodeCoverageResults@2
+            condition: always()
+            inputs:
+              codeCoverageTool: "Cobertura"
+              summaryFileLocation: "coverage.xml"
+
+# =============================================================================
+# STAGE 3: DEPLOY DEV  (main branch only)
+# =============================================================================
+
+  - stage: DeployDev
+    displayName: "Deploy — dev environment"
+    dependsOn: Test
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    variables:
+      - group: FIP-DEV-Variables
+    jobs:
+
+      - deployment: DeployInfra
+        displayName: "Bicep: deploy infrastructure to dev"
+        environment: "fip-dev"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: AzureCLI@2
+                  displayName: "Deploy Bicep to dev"
+                  inputs:
+                    azureSubscription: "fip-dev-service-connection"
+                    scriptType: "bash"
+                    scriptLocation: "inlineScript"
+                    inlineScript: |
+                      az deployment group create \
+                        --resource-group rg-fip-dev \
+                        --template-file iac/main.bicep \
+                        --parameters iac/parameters/dev.bicepparam \
+                                     platformSpObjectId=$(DEV_PLATFORM_SP_OBJECT_ID) \
+                                     dbaGroupObjectId=$(DEV_DBA_GROUP_OBJECT_ID) \
+                                     powerBiSpObjectId=$(DEV_POWERBI_SP_OBJECT_ID) \
+                                     tenantId=$(AZURE_TENANT_ID)
+
+      - job: RunDbtDev
+        displayName: "dbt: deploy models to dev Gold Zone"
+        dependsOn: DeployInfra
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "$(PYTHON_VERSION)"
+
+          - script: |
+              pip install dbt-synapse==$(DBT_VERSION) --quiet
+              cd financial_dbt
+              dbt deps
+              dbt run --target dev --full-refresh --select staging intermediate marts
+              dbt snapshot --target dev
+              dbt test --target dev
+            displayName: "dbt full refresh + snapshot (dev)"
+            env:
+              DEV_SQL_SERVER:    $(DEV_SQL_SERVER)
+              DEV_SQL_DATABASE:  $(DEV_SQL_DATABASE)
+              AZURE_TENANT_ID:   $(AZURE_TENANT_ID)
+
+# =============================================================================
+# STAGE 4: DEPLOY PROD  (tags vX.Y.Z only, manual approval gate)
+# =============================================================================
+
+  - stage: DeployProd
+    displayName: "Deploy — production (approval required)"
+    dependsOn: DeployDev
+    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/v'))
+    variables:
+      - group: FIP-PROD-Variables
+    jobs:
+
+      - deployment: DeployProdInfra
+        displayName: "Bicep: deploy infrastructure to prod"
+        environment: "fip-prod"      # requires manual approval in Azure DevOps Environments
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: AzureCLI@2
+                  displayName: "Deploy Bicep to prod"
+                  inputs:
+                    azureSubscription: "fip-prod-service-connection"
+                    scriptType: "bash"
+                    scriptLocation: "inlineScript"
+                    inlineScript: |
+                      az deployment group create \
+                        --resource-group rg-fip-prod \
+                        --template-file iac/main.bicep \
+                        --parameters iac/parameters/prod.bicepparam \
+                                     platformSpObjectId=$(PROD_PLATFORM_SP_OBJECT_ID) \
+                                     dbaGroupObjectId=$(PROD_DBA_GROUP_OBJECT_ID) \
+                                     powerBiSpObjectId=$(PROD_POWERBI_SP_OBJECT_ID) \
+                                     tenantId=$(AZURE_TENANT_ID) \
+                                     --confirm-with-what-if
+
+      - job: RunDbtProd
+        displayName: "dbt: deploy models to prod Gold Zone"
+        dependsOn: DeployProdInfra
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "$(PYTHON_VERSION)"
+
+          - script: |
+              pip install dbt-synapse==$(DBT_VERSION) --quiet
+              cd financial_dbt
+              dbt deps
+              # Incremental run in prod — never full-refresh automatically
+              dbt run --target prod --select staging intermediate marts
+              dbt snapshot --target prod
+              dbt test --target prod
+            displayName: "dbt incremental run (prod)"
+            env:
+              SYNAPSE_SERVER:    $(PROD_SYNAPSE_SERVER)
+              SYNAPSE_DATABASE:  $(PROD_SYNAPSE_DATABASE)
+              AZURE_TENANT_ID:   $(AZURE_TENANT_ID)
+              AZURE_CLIENT_ID:   $(PROD_AZURE_CLIENT_ID)
+              AZURE_CLIENT_SECRET: $(PROD_AZURE_CLIENT_SECRET)

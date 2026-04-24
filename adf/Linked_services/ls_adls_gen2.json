@@ -1,0 +1,11 @@
+{
+  "name": "ls_adls_gen2",
+  "properties": {
+    "type": "AzureBlobFS",
+    "typeProperties": {
+      "url": "https://fipprodadls.dfs.core.windows.net",
+      "authenticationType": "ManagedServiceIdentity"
+    },
+    "annotations": ["storage", "bronze", "silver", "gold"]
+  }
+}

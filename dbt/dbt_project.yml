@@ -1,0 +1,86 @@
+##############################################################################
+#  FINANCIAL INTELLIGENCE PLATFORM
+#  dbt Project Configuration
+#  Version 1.0 · 2026 · HU GAAP
+#
+#  Accounting Standard : Hungarian GAAP (2000/C Act) — always active
+#  Target DWH          : Azure Synapse Analytics (SQL pool)
+#  Orchestration       : Azure Data Factory (ADF)
+##############################################################################
+
+name: financial_dbt
+version: "1.0.0"
+config-version: 1
+
+# Profile defined in profiles.yml — points to Azure Synapse SQL pool
+profile: fip_synapse
+
+# Default model materialisation strategy per layer
+models:
+  financial_dbt:
+    staging:
+      +materialized: view          # staging = lightweight views over bronze
+      +schema: staging
+      +tags: ["staging", "hu_gaap"]
+
+    intermediate:
+      +materialized: view          # intermediate = business-logic views
+      +schema: intermediate
+      +tags: ["intermediate", "hu_gaap"]
+
+    marts:
+      finance:
+        +materialized: table       # finance marts = physical Gold Zone tables
+        +schema: gold
+        +tags: ["gold", "finance", "hu_gaap"]
+        +post-hook:
+          - "GRANT SELECT ON {{ this }} TO powerbi_reader"
+      analytics:
+        +materialized: table       # KPI tables, refreshed nightly
+        +schema: gold
+        +tags: ["gold", "kpi", "hu_gaap"]
+        +post-hook:
+          - "GRANT SELECT ON {{ this }} TO powerbi_reader"
+
+# Seeds (CSV reference data loaded by dbt seed)
+seeds:
+  financial_dbt:
+    ref_coa_mapping:
+      +schema: config
+      +tags: ["seed", "coa", "hu_gaap"]
+      +column_types:
+        local_account_code: varchar(50)
+        universal_node: varchar(100)
+        account_type: varchar(20)
+        normal_balance: char(1)
+        pl_line_item: varchar(100)
+        cf_classification: varchar(30)
+
+# Snapshot configuration (SCD Type 2 for CoA mapping changes)
+# FIX (2026-04-09): Aligned project-level snapshot config with scd_coa_mapping.sql.
+#   - strategy: check  (tracks column-value changes, not updated_at timestamp)
+#   - invalidate_hard_deletes: true  (marks deleted source rows as expired in SCD)
+#   - Each snapshot MUST define its own check_cols list in the snapshot file.
+#   - DO NOT set +strategy: timestamp here — it is incompatible with check_cols.
+snapshots:
+  financial_dbt:
+    +target_schema: silver
+    +strategy: check
+    +invalidate_hard_deletes: true
+    # check_cols is intentionally NOT set here — each snapshot defines its own
+    # tracked columns. See financial_dbt/snapshots/scd_coa_mapping.sql.
+
+# Global variable defaults — override via ADF pipeline parameters
+vars:
+  fiscal_year_start_month: 1        # January (standard HU GAAP calendar year)
+  reporting_currency: "HUF"
+  nbh_api_url: "https://www.mnb.hu/arfolyamok"
+  late_entry_threshold_days: 5      # Postings >5 days past period-end = late
+  materiality_threshold_revenue: 0.005   # 0.5% of revenue
+  materiality_threshold_opex: 0.02       # 2.0% for minor expense accounts
+  anomaly_zscore_threshold: 2.5
+  gaap_basis: "HU_GAAP"
+
+# Test severity thresholds
+tests:
+  +severity: error                  # All schema tests are blocking by default

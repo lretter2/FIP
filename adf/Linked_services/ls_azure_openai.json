@@ -1,0 +1,16 @@
+{
+  "name": "ls_azure_openai",
+  "properties": {
+    "type": "AzureOpenAI",
+    "typeProperties": {
+      "deploymentName": "gpt-4o",
+      "endpoint": "https://fip-prod-openai.openai.azure.com/",
+      "authenticationType": "ApiKey",
+      "apiKey": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_azure_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "azure-openai-api-key"
+      }
+    }
+  }
+}
