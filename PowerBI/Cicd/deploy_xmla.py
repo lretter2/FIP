@@ -27,8 +27,7 @@ STAGE_CONFIG = {
 
 DATASET_NAME           = os.environ.get("POWERBI_DATASET_NAME", "FIP_Main")
 XMLA_BASE              = os.environ.get("POWERBI_XMLA_BASE", "powerbi://api.powerbi.com/v1.0/myorg")
-MIN_EXPECTED_MEASURES  = 35
-MIN_EXPECTED_RLS_ROLES = 5
+MIN_EXPECTED_MEASURES  = 41
 
 
 def get_xmla_token() -> str:
@@ -118,6 +117,8 @@ def load_tmsl(tmsl_path: Path) -> dict:
     return doc
 
 
+REQUIRED_RLS_ROLES = {"CEO", "CFO", "Controller", "CostCentreManager", "Auditor"}
+
 POST_DEPLOY_CHECKS = [
     {
         "name": "Measures accessible",
@@ -144,10 +145,13 @@ POST_DEPLOY_CHECKS = [
         "error_msg": "Balance sheet equation violated: Total Assets \u2260 Total Liabilities + Total Equity.",
     },
     {
-        "name": "RLS roles defined",
-        "dax": "EVALUATE ROW(\"count\", COUNTROWS(INFO.ROLES()))",
-        "assert": lambda rows: rows and int(list(rows[0].values())[0]) >= MIN_EXPECTED_RLS_ROLES,
-        "error_msg": f"Expected at least {MIN_EXPECTED_RLS_ROLES} RLS roles (CEO, CFO, Controller, CostCentreManager, Auditor).",
+        "name": "RLS roles — all required names present",
+        "dax": "EVALUATE SELECTCOLUMNS(INFO.ROLES(), \"Name\", [Name])",
+        "assert": lambda rows: REQUIRED_RLS_ROLES.issubset({list(r.values())[0] for r in (rows or [])}),
+        "error_msg": (
+            f"One or more required RLS roles are missing. "
+            f"Expected: {', '.join(sorted(REQUIRED_RLS_ROLES))}."
+        ),
     },
 ]
 
@@ -242,8 +246,8 @@ def main():
     parser.add_argument(
         "--tmsl",
         type=Path,
-        default=Path(__file__).parent.parent / "dax_measures" / "FIP_DAX_Measures_TMSL.json",
-        help="Path to TMSL JSON file (default: PowerBI/dax_measures/FIP_DAX_Measures_TMSL.json)",
+        default=Path(__file__).parent.parent / "Dax_measures" / "FIP_DAX_Measures_TMSL.json",
+        help="Path to TMSL JSON file (default: PowerBI/Dax_measures/FIP_DAX_Measures_TMSL.json)",
     )
     parser.add_argument("--dry-run", action="store_true",
                         help="Validate TMSL without connecting or deploying")

@@ -1,8 +1,8 @@
 {
-  "_description": "TMSL (Tabular Model Scripting Language) script to deploy all 40 FIP DAX measures to the FIP_Main dataset via the Power BI Premium XMLA endpoint. Execute via deploy_xmla.py or paste into SQL Server Management Studio connected to the XMLA endpoint.",
+  "_description": "TMSL (Tabular Model Scripting Language) script to deploy all 41 FIP DAX measures to the FIP_Main dataset via the Power BI Premium XMLA endpoint. Execute via deploy_xmla.py or paste into SQL Server Management Studio connected to the XMLA endpoint.",
   "_version": "1.0",
   "_generated": "2026-04-10",
-  "_usage": "python PowerBI/cicd/deploy_xmla.py --stage dev --tmsl PowerBI/dax_measures/FIP_DAX_Measures_TMSL.json",
+  "_usage": "python PowerBI/Cicd/deploy_xmla.py --stage dev --tmsl PowerBI/Dax_measures/FIP_DAX_Measures_TMSL.json",
 
   "createOrReplace": {
     "object": {
@@ -167,6 +167,14 @@
           "description": "Shareholders' equity (Saját tőke) per HU GAAP 2000/C Act §35-§39.",
           "expression": "CALCULATE(\n    SUM(gold_agg_balance_sheet[balance_amount_lcy]),\n    gold_agg_balance_sheet[bs_category] = \"Equity\"\n)",
           "formatString": "#,0,, \" M HUF\"",
+          "displayFolder": "BS_ — Balance Sheet"
+        },
+
+        {
+          "name": "Debt to Equity",
+          "description": "Debt-to-equity ratio (Tőkeáttételi mutató). Total Liabilities ÷ Total Equity. BLANK when equity is zero.",
+          "expression": "DIVIDE(\n    [Total Liabilities],\n    [Total Equity],\n    BLANK()\n)",
+          "formatString": "0.00",
           "displayFolder": "BS_ — Balance Sheet"
         },
 

@@ -122,6 +122,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             "dry_run":        dry_run,
             "timestamp":      start_ts.isoformat(),
             "detail":         changes_tracker["roles"],
+            "log":            log_stream.getvalue(),
         }
 
         logging.info(f"RLS sync succeeded: {changes_tracker['total']} changes across {len(changes_tracker['roles'])} roles")
@@ -138,6 +139,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             "sync_status":   "failed",
             "error_message": str(exc),
             "timestamp":     start_ts.isoformat(),
+            "log":           log_stream.getvalue(),
         }
         return func.HttpResponse(
             json.dumps(response_body),

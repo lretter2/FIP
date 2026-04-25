@@ -107,12 +107,12 @@ stages:
 
     # ── DAX unit tests (dry-run / offline validation) ────────────────────────
     - script: |
-        python PowerBI/dax_tests/run_dax_tests.py --dry-run
+        python PowerBI/Dax_tests/run_dax_tests.py --dry-run
       displayName: "DAX test inventory (dry-run)"
 
     # ── DAX unit tests against DEV dataset ──────────────────────────────────
     - script: |
-        python PowerBI/dax_tests/run_dax_tests.py \
+        python PowerBI/Dax_tests/run_dax_tests.py \
           --workspace "$(POWERBI_DEV_WORKSPACE)" \
           --dataset   "$(POWERBI_DEV_DATASET)" \
           --output    "$(Agent.TempDirectory)/dax-test-results.xml"
@@ -317,7 +317,7 @@ stages:
 
           # ── DAX integration tests vs TEST dataset ───────────────────────
           - script: |
-              python PowerBI/dax_tests/run_dax_tests.py \
+              python PowerBI/Dax_tests/run_dax_tests.py \
                 --workspace "$(POWERBI_TEST_WORKSPACE_NAME)" \
                 --dataset   "$(POWERBI_TEST_DATASET_NAME)" \
                 --output    "$(Agent.TempDirectory)/dax-test-results-test.xml"
@@ -420,6 +420,27 @@ stages:
                   "https://api.powerbi.com/v1.0/myorg/groups/$(POWERBI_PROD_WORKSPACE_ID)/datasets/$(POWERBI_PROD_DATASET_ID)/Default.UpdateDatasources"
             env:
               AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+
+          # ── Sync RLS role membership from AAD immediately after deployment ──
+          # Ensures any org-chart changes are applied before the next refresh,
+          # rather than waiting up to 24 h for the daily 05:00 CET ADF trigger.
+          - task: UsePythonVersion@0
+            displayName: "Use Python $(pythonVersion) for RLS sync"
+            inputs:
+              versionSpec: $(pythonVersion)
+
+          - script: pip install requests azure-identity python-dotenv --quiet
+            displayName: "Install RLS sync dependencies"
+
+          - script: |
+              python PowerBI/Rls/sync_rls_aad.py
+            displayName: "Sync Power BI RLS from AAD (post-PROD deployment)"
+            env:
+              AZURE_TENANT_ID:          $(AZURE_TENANT_ID)
+              AZURE_CLIENT_ID:          $(AZURE_CLIENT_ID)
+              AZURE_CLIENT_SECRET:      $(AZURE_CLIENT_SECRET)
+              POWERBI_PROD_WORKSPACE_ID: $(POWERBI_PROD_WORKSPACE_ID)
+              POWERBI_PROD_DATASET_ID:   $(POWERBI_PROD_DATASET_ID)
 
           # ── Teams notification ─────────────────────────────────────────
           - task: InvokeRestAPI@1
