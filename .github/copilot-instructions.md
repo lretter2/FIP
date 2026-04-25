@@ -69,8 +69,10 @@ dbt, Bicep, and Power BI.
   hardcode the month.
 - Reporting currency is HUF; FX conversion must use MNB (Magyar Nemzeti Bank) rates via the
   `nbh_api_url` variable — never a static rate.
-- Tests in `dbt/Tests/` must cover `not_null`, `unique`, and `accepted_values` for every
-  primary-key and status column; test severity is `error` (blocking).
+- Schema tests in the appropriate zone-specific `*_schema.yml` files must cover
+  `not_null`, `unique`, and `accepted_values` for every primary-key and status column;
+  test severity is `error` (blocking). Reserve `dbt/Tests/` for custom business-rule
+  data tests (SQL assertions).
 - Avoid `SELECT *` in production models; list columns explicitly.
 - Use `{{ ref() }}` and `{{ source() }}` macros; never hardcode schema-qualified table
   names in model SQL.
