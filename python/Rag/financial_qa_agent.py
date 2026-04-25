@@ -790,7 +790,8 @@ if FASTAPI_AVAILABLE:
         <button class="btn" id="submit-btn" onclick="submitQuery()">Ask &#10148;</button>
       </div>
       <div class="query-meta">
-        <input id="user-id" type="text" placeholder="User ID" value="cfo_user" style="width:140px;">
+        <input id="user-id" type="hidden" value="">
+        <span class="meta-note">User identity is determined automatically by your session.</span>
         <input id="entity-code" type="text" placeholder="Entity code (optional)" style="width:200px;">
         <select id="language">
           <option value="en">English</option>
