@@ -49,6 +49,7 @@ from db_utils import get_db_connection, get_openai_client
 
 try:
     from fastapi import FastAPI, HTTPException, Security
+    from fastapi.responses import HTMLResponse
     from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
     FASTAPI_AVAILABLE = True
 except ImportError:
@@ -494,6 +495,535 @@ if FASTAPI_AVAILABLE:
     @app.get("/health")
     async def health():
         return {"status": "healthy", "version": "1.0.0"}
+
+    @app.get("/ui", response_class=HTMLResponse)
+    async def ui():
+        """
+        Web UI for the FIP Financial Q&A Agent.
+        Provides a CFO-persona dashboard with KPI summary cards, a natural
+        language query input, result table, AI narrative, and generated SQL
+        display — all served from the same FastAPI process.
+        """
+        html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIP Financial Q&amp;A Agent</title>
+<style>
+  :root {
+    --navy:   #1B3A6B;
+    --blue:   #1565C0;
+    --green:  #2E7D32;
+    --amber:  #E65100;
+    --red:    #C62828;
+    --grey:   #607D8B;
+    --bg:     #F5F6FA;
+    --white:  #FFFFFF;
+    --border: #CFD8DC;
+    --text:   #212121;
+    --muted:  #546E7A;
+    --radius: 6px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+  /* ── Header ──────────────────────────────────────────────── */
+  header {
+    background: var(--navy);
+    color: var(--white);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 18px; font-weight: 600; letter-spacing: .3px; }
+  header .badge {
+    font-size: 11px;
+    background: rgba(255,255,255,.18);
+    border-radius: 20px;
+    padding: 3px 10px;
+  }
+
+  /* ── Layout ──────────────────────────────────────────────── */
+  main { max-width: 1440px; margin: 0 auto; padding: 20px 24px 40px; }
+  section { margin-bottom: 24px; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--muted);
+       text-transform: uppercase; letter-spacing: .6px; margin-bottom: 12px; }
+
+  /* ── KPI Cards ───────────────────────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 12px;
+  }
+  .kpi-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--navy);
+    border-radius: var(--radius);
+    padding: 14px 16px 12px;
+  }
+  .kpi-card .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase;
+                         letter-spacing: .4px; margin-bottom: 6px; }
+  .kpi-card .kpi-value { font-size: 26px; font-weight: 700; color: var(--navy); line-height: 1; }
+  .kpi-card .kpi-sub   { font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .kpi-card .kpi-delta { font-size: 12px; font-weight: 600; margin-top: 4px; }
+  .delta-pos { color: var(--green); }
+  .delta-neg { color: var(--red); }
+  .delta-neu { color: var(--grey); }
+
+  /* ── Query Panel ─────────────────────────────────────────── */
+  .query-panel {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+  }
+  .query-row { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+  .query-row textarea {
+    flex: 1 1 400px;
+    min-height: 64px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+  }
+  .query-row textarea:focus { outline: 2px solid var(--blue); border-color: transparent; }
+  .query-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .query-meta input, .query-meta select {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .query-meta input:focus, .query-meta select:focus { outline: 2px solid var(--blue); }
+  .btn {
+    padding: 10px 22px;
+    background: var(--navy);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--blue); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ── Spinner ─────────────────────────────────────────────── */
+  #spinner { display: none; align-items: center; gap: 10px; color: var(--muted);
+             font-size: 13px; margin-top: 12px; }
+  .spin {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--navy);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Results ─────────────────────────────────────────────── */
+  #results { display: none; }
+  .intent-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    background: #E3F2FD;
+    color: var(--blue);
+    margin-left: 8px;
+  }
+  .answer-box {
+    background: var(--white);
+    border-left: 4px solid var(--navy);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 16px 20px;
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    margin-bottom: 16px;
+  }
+  .sql-box {
+    background: #263238;
+    color: #ECEFF1;
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin-bottom: 16px;
+  }
+  .sql-box summary {
+    cursor: pointer;
+    color: #90A4AE;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 12px;
+    margin-bottom: 8px;
+    user-select: none;
+  }
+  .sql-box summary:hover { color: var(--white); }
+  .result-table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: var(--white);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  th {
+    background: var(--navy);
+    color: var(--white);
+    padding: 9px 12px;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #EEF2FF; }
+  .row-count { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* ── Warning / Error ─────────────────────────────────────── */
+  .alert {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .alert-warn { background: #FFF8E1; border-left: 4px solid #FFA000; }
+  .alert-err  { background: #FDECEA; border-left: 4px solid var(--red); }
+
+  /* ── Suggestions ─────────────────────────────────────────── */
+  .suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .suggestion-btn {
+    font-size: 12px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--white);
+    cursor: pointer;
+    color: var(--navy);
+    transition: background .15s;
+  }
+  .suggestion-btn:hover { background: #E8EAF6; border-color: var(--blue); }
+
+  /* ── Footer ──────────────────────────────────────────────── */
+  footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>&#128202; FIP Financial Q&amp;A Agent</h1>
+  <span class="badge">HU GAAP &middot; Azure Synapse &middot; v1.0</span>
+</header>
+
+<main>
+
+  <!-- KPI Summary Cards -->
+  <section>
+    <h2>CFO Dashboard KPIs — Current Selection</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card" id="kpi-revenue">
+        <div class="kpi-label">Revenue</div>
+        <div class="kpi-value" id="kv-revenue">—</div>
+        <div class="kpi-sub">vs Budget</div>
+        <div class="kpi-delta" id="kd-revenue">&nbsp;</div>
+      </div>
+      <div class="kpi-card" id="kpi-ebitda">
+        <div class="kpi-label">EBITDA</div>
+        <div class="kpi-value" id="kv-ebitda">—</div>
+        <div class="kpi-sub">vs Budget</div>
+        <div class="kpi-delta" id="kd-ebitda">&nbsp;</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">EBITDA Margin %</div>
+        <div class="kpi-value" id="kv-ebitda-margin">—</div>
+        <div class="kpi-sub">Current period</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Net Profit</div>
+        <div class="kpi-value" id="kv-net-profit">—</div>
+        <div class="kpi-sub">HU GAAP mérleg szerinti eredmény</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Free Cash Flow</div>
+        <div class="kpi-value" id="kv-fcf">—</div>
+        <div class="kpi-sub">Operating CF − Capex</div>
+      </div>
+      <div class="kpi-card" id="kpi-current-ratio">
+        <div class="kpi-label">Current Ratio</div>
+        <div class="kpi-value" id="kv-current-ratio">—</div>
+        <div class="kpi-sub">Target &#8805; 1.5</div>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:10px;">
+      KPI values update automatically after each query that returns profitability or balance-sheet data.
+      Use the Q&amp;A input below to retrieve live figures from Azure Synapse.
+    </p>
+  </section>
+
+  <!-- Q&A Query Panel -->
+  <section>
+    <h2>Ask a Financial Question</h2>
+    <div class="query-panel">
+      <div class="query-row">
+        <textarea id="query-input" placeholder="e.g. What was the EBITDA margin in Q1 2026? / Mi volt az árbevétel 2026 január-ban?"></textarea>
+        <button class="btn" id="submit-btn" onclick="submitQuery()">Ask &#10148;</button>
+      </div>
+      <div class="query-meta">
+        <input id="user-id" type="text" placeholder="User ID" value="cfo_user" style="width:140px;">
+        <input id="entity-code" type="text" placeholder="Entity code (optional)" style="width:200px;">
+        <select id="language">
+          <option value="en">English</option>
+          <option value="hu">Magyar</option>
+        </select>
+      </div>
+      <div class="suggestions">
+        <button class="suggestion-btn" onclick="setSuggestion('What was the EBITDA margin in Q1 2026?')">EBITDA margin Q1 2026</button>
+        <button class="suggestion-btn" onclick="setSuggestion('Show revenue trend for fiscal year 2026')">Revenue trend FY2026</button>
+        <button class="suggestion-btn" onclick="setSuggestion('Why did costs increase last quarter?')">Cost variance last quarter</button>
+        <button class="suggestion-btn" onclick="setSuggestion('Show me the top 10 cost centres by spend')">Top 10 cost centres</button>
+        <button class="suggestion-btn" onclick="setSuggestion('What is the current ratio for all entities?')">Current ratio all entities</button>
+        <button class="suggestion-btn" onclick="setSuggestion('Compare free cash flow vs prior year by entity')">FCF vs prior year</button>
+      </div>
+      <div id="spinner"><div class="spin"></div> Processing query&hellip;</div>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="results">
+    <h2>
+      Answer
+      <span class="intent-badge" id="intent-badge"></span>
+    </h2>
+
+    <div id="warning-box" class="alert alert-warn" style="display:none;"></div>
+
+    <div class="answer-box" id="answer-text"></div>
+
+    <details class="sql-box">
+      <summary>&#128196; Generated SQL Query (click to expand)</summary>
+      <pre id="sql-text"></pre>
+    </details>
+
+    <div class="result-table-wrap">
+      <table id="result-table">
+        <thead id="result-thead"></thead>
+        <tbody id="result-tbody"></tbody>
+      </table>
+      <div class="row-count" id="row-count-label"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Financial Intelligence Platform &middot; HU GAAP (2000/C Act) &middot; Azure Synapse Analytics &middot;
+  <a href="/docs" style="color:var(--blue);">API Docs</a> &middot;
+  <a href="/health" style="color:var(--blue);">Health</a>
+</footer>
+
+<script>
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  function fmt_mhuf(val) {
+    if (val == null || isNaN(val)) return "—";
+    const m = val / 1e6;
+    return (m >= 0 ? "+" : "") + m.toLocaleString("en-GB", {maximumFractionDigits: 1}) + " M HUF";
+  }
+
+  function fmt_pct(val) {
+    if (val == null || isNaN(val)) return "—";
+    return (val * 100).toFixed(1) + "%";
+  }
+
+  function fmt_ratio(val) {
+    if (val == null || isNaN(val)) return "—";
+    return parseFloat(val).toFixed(2);
+  }
+
+  function ragClass(val) {
+    if (val == null || isNaN(val)) return "delta-neu";
+    return val >= 0 ? "delta-pos" : "delta-neg";
+  }
+
+  function setSuggestion(text) {
+    document.getElementById("query-input").value = text;
+  }
+
+  // ── KPI update from result data ──────────────────────────────────────────
+
+  function tryUpdateKpis(rows) {
+    if (!rows || rows.length === 0) return;
+    // Look for known column names (case-insensitive) across the result rows
+    const first = rows[0];
+    const keys = Object.keys(first).map(k => k.toLowerCase());
+
+    function getCol(row, ...names) {
+      for (const n of names) {
+        const match = Object.keys(row).find(k => k.toLowerCase().includes(n));
+        if (match !== undefined && row[match] !== null) return parseFloat(row[match]);
+      }
+      return null;
+    }
+
+    // Aggregate totals across all returned rows (sum numeric KPIs)
+    const totals = {};
+    for (const row of rows) {
+      for (const k of Object.keys(row)) {
+        const v = parseFloat(row[k]);
+        if (!isNaN(v)) totals[k] = (totals[k] || 0) + v;
+      }
+    }
+
+    const revenue    = getCol(totals, "revenue");
+    const ebitda     = getCol(totals, "ebitda");
+    const net_profit = getCol(totals, "net_profit");
+    const fcf        = getCol(totals, "free_cash_flow", "fcf");
+    const cur_ratio  = getCol(rows[0], "current_ratio");  // ratio — don't sum
+    const ebitda_m   = (revenue && ebitda) ? ebitda / revenue : null;
+    const rev_var_pct = getCol(rows[0], "revenue_variance_pct", "revenue_yoy_pct");
+
+    if (revenue !== null) {
+      document.getElementById("kv-revenue").textContent = fmt_mhuf(revenue);
+      if (rev_var_pct !== null) {
+        const el = document.getElementById("kd-revenue");
+        el.textContent = (rev_var_pct >= 0 ? "▲ " : "▼ ") + fmt_pct(rev_var_pct) + " vs budget";
+        el.className = "kpi-delta " + ragClass(rev_var_pct);
+      }
+    }
+    if (ebitda !== null)     document.getElementById("kv-ebitda").textContent = fmt_mhuf(ebitda);
+    if (ebitda_m !== null)   document.getElementById("kv-ebitda-margin").textContent = fmt_pct(ebitda_m);
+    if (net_profit !== null) document.getElementById("kv-net-profit").textContent = fmt_mhuf(net_profit);
+    if (fcf !== null)        document.getElementById("kv-fcf").textContent = fmt_mhuf(fcf);
+    if (cur_ratio !== null) {
+      const el = document.getElementById("kv-current-ratio");
+      el.textContent = fmt_ratio(cur_ratio);
+      el.style.color = cur_ratio < 1.0 ? "var(--red)" : cur_ratio < 1.5 ? "var(--amber)" : "var(--green)";
+    }
+  }
+
+  // ── Table render ─────────────────────────────────────────────────────────
+
+  function renderTable(rows) {
+    const thead = document.getElementById("result-thead");
+    const tbody = document.getElementById("result-tbody");
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
+    if (!rows || rows.length === 0) return;
+
+    const cols = Object.keys(rows[0]);
+    const headerRow = document.createElement("tr");
+    cols.forEach(c => {
+      const th = document.createElement("th");
+      th.textContent = c;
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+
+    rows.forEach(row => {
+      const tr = document.createElement("tr");
+      cols.forEach(c => {
+        const td = document.createElement("td");
+        const v = row[c];
+        td.textContent = (v === null || v === undefined) ? "" : v;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ── Submit query ─────────────────────────────────────────────────────────
+
+  async function submitQuery() {
+    const query      = document.getElementById("query-input").value.trim();
+    const user_id    = document.getElementById("user-id").value.trim() || "web_user";
+    const entity_code = document.getElementById("entity-code").value.trim() || null;
+    const language   = document.getElementById("language").value;
+
+    if (!query) { alert("Please enter a question."); return; }
+
+    document.getElementById("submit-btn").disabled = true;
+    document.getElementById("spinner").style.display = "flex";
+    document.getElementById("results").style.display = "none";
+    document.getElementById("warning-box").style.display = "none";
+
+    try {
+      const resp = await fetch("/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, user_id, entity_code, language })
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(data.detail || "Server error " + resp.status);
+      }
+
+      // Populate results
+      document.getElementById("intent-badge").textContent = data.intent || "";
+      document.getElementById("answer-text").textContent  = data.answer || "";
+      document.getElementById("sql-text").textContent     = data.generated_sql || "";
+
+      if (data.warning) {
+        const wb = document.getElementById("warning-box");
+        wb.textContent = "⚠ " + data.warning;
+        wb.style.display = "block";
+      }
+
+      const rows = data.result_data || [];
+      renderTable(rows);
+      tryUpdateKpis(rows);
+
+      const label = document.getElementById("row-count-label");
+      label.textContent = rows.length > 0
+        ? `Showing ${rows.length} of ${data.row_count} row(s) returned.`
+        : "The query returned no data rows.";
+
+      document.getElementById("results").style.display = "block";
+
+    } catch (err) {
+      const errDiv = document.createElement("div");
+      errDiv.className = "alert alert-err";
+      errDiv.textContent = "Error: " + err.message;
+      document.getElementById("results").prepend(errDiv);
+      document.getElementById("results").style.display = "block";
+    } finally {
+      document.getElementById("submit-btn").disabled = false;
+      document.getElementById("spinner").style.display = "none";
+    }
+  }
+
+  // Allow Ctrl+Enter to submit
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("query-input").addEventListener("keydown", e => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) submitQuery();
+    });
+  });
+</script>
+</body>
+</html>"""
+        return HTMLResponse(content=html)
 
 
 # ---------------------------------------------------------------------------
