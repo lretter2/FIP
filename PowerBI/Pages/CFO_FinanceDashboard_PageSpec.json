@@ -546,13 +546,14 @@
       {
         "name": "_PLBridgeOrder",
         "dax": "DATATABLE(\"step_order\", INTEGER, \"step_label\", STRING, {{1,\"Revenue\"},{2,\"(COGS)\"},{3,\"Gross Profit\"},{4,\"Other OI\"},{5,\"(Personnel)\"},{6,\"(Other OpEx)\"},{7,\"EBITDA\"},{8,\"(D&A)\"},{9,\"Fin. Items (net)\"},{10,\"(Tax)\"},{11,\"Net Profit\"}})",
-        "description": "Ordered bridge step table for the P&L waterfall chart. Static — no refresh required."
+        "description": "Ordered bridge step table for the P&L waterfall chart. Static — no refresh required. In the Power BI model, set _PLBridgeOrder[step_label] to Sort by column = _PLBridgeOrder[step_order] so the waterfall uses the intended business order instead of alphabetical sorting."
       }
     ]
   },
 
   "implementationChecklist": [
     "Add _PLBridgeOrder calculated table via Tabular Editor or TMSL before deploying this page.",
+    "In the Power BI model, configure _PLBridgeOrder[step_label] with Sort by column = _PLBridgeOrder[step_order] so the waterfall bridge renders in business order rather than alphabetical order.",
     "Add supporting DAX measures ([Revenue YoY %], [EBITDA RAG], [PL Bridge Amount], [PL Bridge Type]) to FIP_Main dataset.",
     "Validate all slicer fields are accessible under CFO RLS role (empty DAX filter — all entities visible).",
     "Import page into Power BI Desktop and adjust visual layout positions to match the JSON coordinates.",
