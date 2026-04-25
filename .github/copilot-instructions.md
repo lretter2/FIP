@@ -29,8 +29,10 @@ dbt, Bicep, and Power BI.
 
 - All requests **must** flow through `TenantRouter`; cross-tenant data leakage is the
   highest-severity defect category.
-- `TenantContext` objects must be constructed once per request and propagated explicitly —
-  never stored in global or module-level variables.
+- `TenantContext` objects must be constructed once per request and propagated explicitly.
+  Use request-scoped storage such as `request.state.tenant_context` or `contextvars`
+  when needed; do not store tenant context in shared mutable global or module-level
+  state.
 - Database/schema names are tenant-specific; always derive them from `TenantDatabase`
   rather than hardcoding.
 - Unit tests for tenant-aware code must verify that one tenant cannot access another
