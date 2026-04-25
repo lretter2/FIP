@@ -283,9 +283,10 @@ SWITCH(
 | Slicer | Field | Sync |
 |---|---|---|
 | Fiscal Year | `silver_dim_date[fiscal_year]` | All pages |
-| Period (Month) | `silver_dim_date[fiscal_period]` | All pages |
+| Period (Month) | `silver_dim_date[fiscal_period]` | This page only |
 | Legal Entity | `silver_dim_entity[entity_name]` (multi-select) | All pages |
 
+Only **Fiscal Year** and **Legal Entity** slicers are synced across pages. The **Period (Month)** slicer is intentionally page-scoped for this dashboard.
 Cross-filter: selecting a period in the revenue trend chart filters the entity P&L matrix. Selecting an entity in the scatter plot filters the matrix.
 
 ---
