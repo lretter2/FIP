@@ -3,7 +3,6 @@
 Uses FastAPI TestClient to simulate HTTP requests through the middleware
 without requiring real Azure infrastructure.
 """
-import sys
 import pytest
 
 from fastapi import FastAPI, Request
