@@ -23,8 +23,19 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import pyodbc
-from jsonschema import validate, ValidationError
 from openai import AzureOpenAI
+
+try:
+    from jsonschema import validate, ValidationError
+except ImportError:
+    class ValidationError(Exception):  # type: ignore[no-redef]
+        pass
+
+    def validate(*args: Any, **kwargs: Any) -> None:  # type: ignore[no-redef]
+        raise ImportError(
+            "jsonschema is required for input validation but is not installed. "
+            "Add 'jsonschema' to the project's runtime or test dependencies."
+        )
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 from db_utils import get_db_connection, get_openai_client
