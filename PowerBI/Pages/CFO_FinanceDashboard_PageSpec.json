@@ -238,7 +238,7 @@
         {
           "id": "v_pl_waterfall",
           "type": "waterfallChart",
-          "position": { "x": 952, "y": 264, "width": 952, "height": 268 },
+          "position": { "x": 952, "y": 264, "width": 650, "height": 268 },
           "displayName": "P&L Bridge — Revenue to Net Profit",
           "_note": "Waterfall shows the build-up from Revenue to Net Profit via EBITDA bridge components. Requires a manually ordered axis using a supporting bridge table or ranked measures.",
           "category": {
@@ -432,13 +432,12 @@
     {
       "id": "section_narrative",
       "displayName": "AI Narrative",
-      "_layout_note": "Narrow narrative panel on the right side, alongside the scatter/cashflow row, y=548, height=268. Rendered via Q&A visual or Smart Narrative.",
+      "_layout_note": "Narrow narrative panel at x=1618, y=264 — to the right of the P&L waterfall chart, sharing the primary charts row. Does not overlap any other visual.",
       "visuals": [
         {
           "id": "v_smart_narrative",
           "type": "smartNarrative",
-          "position": { "x": 16, "y": 264, "width": 920, "height": 268 },
-          "_layout_override": "This visual overlaps with v_revenue_trend. In practice place at an unused area or use a dedicated page tab for narrative. Adjust layout in Power BI Desktop.",
+          "position": { "x": 1618, "y": 264, "width": 286, "height": 268 },
           "_note": "Smart Narrative visual auto-generates bullet-point commentary summarising Revenue vs Budget, EBITDA trend, and FCF status for the selected period and entity filter.",
           "dynamicValues": [
             { "measure": "[Revenue]",          "displayName": "Revenue" },
@@ -512,7 +511,7 @@
         "name": "[Revenue YoY %]",
         "displayFolder": "VAR_ — Variance vs Budget",
         "formatString": "+0.0%;-0.0%",
-        "dax": "DIVIDE([Revenue] - CALCULATE([Revenue], SAMEPERIODLASTYEAR(silver_dim_date[calendar_date])), ABS(CALCULATE([Revenue], SAMEPERIODLASTYEAR(silver_dim_date[calendar_date]))), BLANK())",
+        "dax": "VAR py_revenue = CALCULATE([Revenue], SAMEPERIODLASTYEAR(silver_dim_date[calendar_date])) RETURN DIVIDE([Revenue] - py_revenue, ABS(py_revenue), BLANK())",
         "description": "Revenue year-over-year growth percentage. BLANK when prior-year revenue is zero or absent."
       },
       {

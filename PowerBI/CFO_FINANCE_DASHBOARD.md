@@ -176,11 +176,9 @@ The following measures are required by this page in addition to the standard lib
 
 ### `[Revenue YoY %]`
 ```dax
-DIVIDE(
-    [Revenue] - CALCULATE([Revenue], SAMEPERIODLASTYEAR(silver_dim_date[calendar_date])),
-    ABS(CALCULATE([Revenue], SAMEPERIODLASTYEAR(silver_dim_date[calendar_date]))),
-    BLANK()
-)
+VAR py_revenue = CALCULATE([Revenue], SAMEPERIODLASTYEAR(silver_dim_date[calendar_date]))
+RETURN
+DIVIDE([Revenue] - py_revenue, ABS(py_revenue), BLANK())
 ```
 *Display folder: VAR_ — Variance vs Budget · Format: `+0.0%;-0.0%`*
 
