@@ -917,7 +917,14 @@ if FASTAPI_AVAILABLE:
     const net_profit = getCol(totals, "net_profit");
     const fcf        = getCol(totals, "free_cash_flow", "fcf");
     const cur_ratio  = getCol(rows[0], "current_ratio");  // ratio — don't sum
-    const ebitda_m   = (revenue && ebitda) ? ebitda / revenue : null;
+    const ebitda_m   =
+      revenue !== null &&
+      revenue !== undefined &&
+      revenue !== 0 &&
+      ebitda !== null &&
+      ebitda !== undefined
+        ? ebitda / revenue
+        : null;
     const rev_var_pct = getCol(rows[0], "revenue_variance_pct", "revenue_yoy_pct");
 
     if (revenue !== null) {
