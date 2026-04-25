@@ -75,8 +75,9 @@ dbt, Bicep, and Power BI.
 
 ## 5. Azure Infrastructure (Bicep / ADF)
 
-- All Bicep modules must accept `location`, `resourcePrefix`, and `tags` parameters; never
-  hardcode resource names.
+- All Bicep modules must accept `location`, explicit resource-name parameters (for example,
+  `*Name` parameters), and `tags`; build names centrally in `main.bicep` from
+  `projectCode`/`environment`, and never hardcode resource names inside modules.
 - Key Vault references (`@Microsoft.KeyVault(...)`) must be used for secrets in ARM/Bicep
   — never plaintext parameter values.
 - ADF pipelines that move financial data must include a Data Quality validation activity
