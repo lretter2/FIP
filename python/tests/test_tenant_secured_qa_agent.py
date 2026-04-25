@@ -6,7 +6,7 @@ for this unit-test suite.
 """
 import sys
 from types import ModuleType
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Stub heavy modules before importing the module under test
 for _mod in (
