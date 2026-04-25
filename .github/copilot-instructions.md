@@ -55,8 +55,10 @@ dbt, Bicep, and Power BI.
 
 ## 4. SQL / dbt Standards
 
-- All models must declare `schema`, `tags`, and `description` in the corresponding
-  `schema.yml` file.
+- Add model `description` entries and tests in the appropriate zone-specific dbt docs file
+  (for example `staging_schema.yml`, `intermediate_schema.yml`, or `gold_schema.yml`),
+  rather than assuming a file literally named `schema.yml`. Configure model `schema`
+  (via `+schema:`) and repo-level tags in `dbt/dbt_project.yml`.
 - Staging models materialise as **views**; Gold Zone models as **tables** with
   `GRANT SELECT ON {{ this }} TO powerbi_reader` post-hooks.
 - HU GAAP fiscal year starts January 1; use `vars.fiscal_year_start_month` — never
