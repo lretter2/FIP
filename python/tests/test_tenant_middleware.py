@@ -7,7 +7,6 @@ import sys
 import pytest
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from tenant_config import TenantDatabase, TenantIsolationModel, TenantRegistry
