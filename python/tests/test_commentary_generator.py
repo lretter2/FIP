@@ -40,6 +40,8 @@ from commentary_generator import (
     _build_alerts,
     write_commentary_to_queue,
     process_commentaries,
+    validate_fact_pack,
+    generate_commentary,
     MATERIALITY_THRESHOLD,
 )
 
@@ -559,12 +561,10 @@ class TestValidateFactPack:
         }
 
     def test_valid_fact_pack_no_exception(self):
-        from commentary_generator import validate_fact_pack
         fact_pack = self._make_valid_fact_pack()
         validate_fact_pack(fact_pack)  # Should not raise
 
     def test_missing_required_field_logs_warning(self, caplog):
-        from commentary_generator import validate_fact_pack
         import logging
         fact_pack = self._make_valid_fact_pack()
         del fact_pack["report_metadata"]["entity_code"]
@@ -573,7 +573,6 @@ class TestValidateFactPack:
         assert any("validation" in record.message.lower() for record in caplog.records)
 
     def test_missing_schema_file_logs_warning_not_raises(self, caplog):
-        from commentary_generator import validate_fact_pack
         import logging
         fact_pack = self._make_valid_fact_pack()
         with patch("commentary_generator.VALIDATION_SCHEMA_FILE", "/nonexistent/schema.json"):
@@ -593,7 +592,6 @@ class TestGenerateCommentaryWithTranslation:
         }
 
     def test_english_generation_returns_commentary(self):
-        from commentary_generator import generate_commentary
         client = MagicMock()
         client.chat.completions.create.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content="English commentary"))]
@@ -604,7 +602,6 @@ class TestGenerateCommentaryWithTranslation:
         assert client.chat.completions.create.call_count == 1
 
     def test_hungarian_language_triggers_translation_call(self):
-        from commentary_generator import generate_commentary
         client = MagicMock()
         client.chat.completions.create.side_effect = [
             MagicMock(choices=[MagicMock(message=MagicMock(content="English commentary"))]),
@@ -616,7 +613,6 @@ class TestGenerateCommentaryWithTranslation:
         assert client.chat.completions.create.call_count == 2
 
     def test_translation_uses_hu_prompt(self):
-        from commentary_generator import generate_commentary
         client = MagicMock()
         client.chat.completions.create.side_effect = [
             MagicMock(choices=[MagicMock(message=MagicMock(content="English text"))]),
@@ -630,7 +626,6 @@ class TestGenerateCommentaryWithTranslation:
             assert second_call_messages[0]["content"] == "HU prompt"
 
     def test_validation_error_during_generation_returns_failed(self):
-        from commentary_generator import process_commentaries
         conn = MagicMock()
         client = MagicMock()
         with patch("commentary_generator.build_variance_fact_pack", side_effect=ValueError("No data")):
