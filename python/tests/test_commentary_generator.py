@@ -523,3 +523,117 @@ class TestProcessCommentaries:
         statuses = {r["role"]: r["status"] for r in results}
         assert statuses["CFO"] == "FAILED"
         assert statuses["CEO"] == "QUEUED"
+
+
+# ── validate_fact_pack ─────────────────────────────────────────────────────
+
+class TestValidateFactPack:
+    def _make_valid_fact_pack(self):
+        return {
+            "report_metadata": {
+                "entity_code": "ACME_HU",
+                "period_key": 202601,
+                "gaap_basis": "HU GAAP (2000/C Act)",
+                "reporting_currency": "HUF",
+                "generated_at": "2026-04-25T09:45:38Z",
+                "materiality_threshold_pct": 5.0,
+            },
+            "pl_summary": {
+                "revenue_current": "100.0M HUF",
+                "revenue_budget": "95.0M HUF",
+                "revenue_vs_budget_pct": "5.3%",
+            },
+            "balance_sheet_highlights": {
+                "total_assets": "200.0M HUF",
+                "total_equity": "80.0M HUF",
+            },
+            "liquidity_highlights": {
+                "current_ratio": "1.80x",
+                "dso_days": "45 days",
+            },
+            "cash_flow": {
+                "operating_cash_flow": "25.0M HUF",
+                "free_cash_flow": "20.0M HUF",
+            },
+            "alerts": [],
+        }
+
+    def test_valid_fact_pack_no_exception(self):
+        from commentary_generator import validate_fact_pack
+        fact_pack = self._make_valid_fact_pack()
+        validate_fact_pack(fact_pack)  # Should not raise
+
+    def test_missing_required_field_logs_warning(self, caplog):
+        from commentary_generator import validate_fact_pack
+        import logging
+        fact_pack = self._make_valid_fact_pack()
+        del fact_pack["report_metadata"]["entity_code"]
+        with caplog.at_level(logging.WARNING):
+            validate_fact_pack(fact_pack)
+        assert any("validation" in record.message.lower() for record in caplog.records)
+
+    def test_missing_schema_file_logs_warning_not_raises(self, caplog):
+        from commentary_generator import validate_fact_pack
+        import logging
+        fact_pack = self._make_valid_fact_pack()
+        with patch("commentary_generator.VALIDATION_SCHEMA_FILE", "/nonexistent/schema.json"):
+            with caplog.at_level(logging.WARNING):
+                validate_fact_pack(fact_pack)
+        assert any("validation" in record.message.lower() for record in caplog.records)
+
+
+# ── generate_commentary with Hungarian translation ──────────────────────────
+
+class TestGenerateCommentaryWithTranslation:
+    def _make_fact_pack(self):
+        return {
+            "report_metadata": {"entity_code": "ACME_HU", "period_key": 202601},
+            "pl_summary": {},
+            "alerts": [],
+        }
+
+    def test_english_generation_returns_commentary(self):
+        from commentary_generator import generate_commentary
+        client = MagicMock()
+        client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="English commentary"))]
+        )
+        fact_pack = self._make_fact_pack()
+        result = generate_commentary(client, fact_pack, "CFO", language="en")
+        assert result == "English commentary"
+        assert client.chat.completions.create.call_count == 1
+
+    def test_hungarian_language_triggers_translation_call(self):
+        from commentary_generator import generate_commentary
+        client = MagicMock()
+        client.chat.completions.create.side_effect = [
+            MagicMock(choices=[MagicMock(message=MagicMock(content="English commentary"))]),
+            MagicMock(choices=[MagicMock(message=MagicMock(content="Magyar megjegyzés"))]),
+        ]
+        fact_pack = self._make_fact_pack()
+        result = generate_commentary(client, fact_pack, "CFO", language="hu")
+        assert result == "Magyar megjegyzés"
+        assert client.chat.completions.create.call_count == 2
+
+    def test_translation_uses_hu_prompt(self):
+        from commentary_generator import generate_commentary
+        client = MagicMock()
+        client.chat.completions.create.side_effect = [
+            MagicMock(choices=[MagicMock(message=MagicMock(content="English text"))]),
+            MagicMock(choices=[MagicMock(message=MagicMock(content="Hungarian text"))]),
+        ]
+        fact_pack = self._make_fact_pack()
+        with patch("commentary_generator.load_hungarian_translation_prompt", return_value="HU prompt"):
+            generate_commentary(client, fact_pack, "CFO", language="hu")
+            # Second call should use the Hungarian translation prompt
+            second_call_messages = client.chat.completions.create.call_args_list[1][1]["messages"]
+            assert second_call_messages[0]["content"] == "HU prompt"
+
+    def test_validation_error_during_generation_returns_failed(self):
+        from commentary_generator import process_commentaries
+        conn = MagicMock()
+        client = MagicMock()
+        with patch("commentary_generator.build_variance_fact_pack", side_effect=ValueError("No data")):
+            results = process_commentaries(conn, client, "ACME_HU", 202601, ["CFO"], ["en"])
+        assert results[0]["status"] == "FAILED"
+        assert "No data" in results[0]["error"]

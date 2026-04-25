@@ -220,6 +220,8 @@ def validate_fact_pack(fact_pack: dict) -> None:
         logger.info("Fact pack validation passed")
     except ValidationError as e:
         logger.warning("Fact pack validation warning: %s", e.message)
+    except (OSError, json.JSONDecodeError, Exception) as e:
+        logger.warning("Fact pack validation skipped due to schema error: %s", str(e))
 
 
 def generate_commentary(client: AzureOpenAI, fact_pack: dict, role: str, language: str = "en") -> str:
