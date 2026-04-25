@@ -1,0 +1,566 @@
+{
+  "_schema": "FIP-PowerBI-PageSpec/1.0",
+  "_description": "PBIP-compatible page layout specification for CFO Finance Dashboard. Import into Power BI Desktop or reference during PBIP migration. All visual positions follow a 1920×1080 (16:9) canvas at 100% scale.",
+  "_last_updated": "2026-04-25",
+  "_persona": "CFO",
+  "_rls_role": "CFO",
+  "_dataset": "FIP_Main",
+
+  "page": {
+    "name": "CFO Finance Dashboard",
+    "displayName": "CFO Finance Dashboard",
+    "ordinal": 2,
+    "width": 1920,
+    "height": 1080,
+    "background": {
+      "transparency": 0,
+      "color": "#F5F6FA"
+    },
+    "wallpaper": {
+      "transparency": 0,
+      "color": "#FFFFFF"
+    },
+    "filters": [
+      {
+        "type": "slicerSync",
+        "field": "silver_dim_date[fiscal_year]",
+        "displayName": "Fiscal Year",
+        "syncAcrossPages": true
+      },
+      {
+        "type": "slicerSync",
+        "field": "silver_dim_date[fiscal_period]",
+        "displayName": "Period",
+        "syncAcrossPages": true
+      },
+      {
+        "type": "slicerSync",
+        "field": "silver_dim_entity[entity_name]",
+        "displayName": "Legal Entity",
+        "syncAcrossPages": true
+      }
+    ]
+  },
+
+  "sections": [
+    {
+      "id": "section_header",
+      "displayName": "Page Header",
+      "visuals": [
+        {
+          "id": "v_header_title",
+          "type": "textbox",
+          "position": { "x": 0, "y": 0, "width": 1920, "height": 64 },
+          "style": {
+            "background": "#1B3A6B",
+            "fontColor": "#FFFFFF",
+            "fontSize": 22,
+            "fontFamily": "Segoe UI",
+            "fontWeight": "bold",
+            "paddingLeft": 24,
+            "verticalAlign": "middle"
+          },
+          "text": "CFO Finance Dashboard · {fiscal_year} · HU GAAP · FIP v1.0",
+          "_note": "Title bar. fiscal_year is substituted by the Fiscal Year slicer selection."
+        }
+      ]
+    },
+
+    {
+      "id": "section_slicers",
+      "displayName": "Slicers Row",
+      "visuals": [
+        {
+          "id": "v_slicer_year",
+          "type": "slicer",
+          "position": { "x": 16, "y": 72, "width": 200, "height": 48 },
+          "field": "silver_dim_date[fiscal_year]",
+          "slicerType": "dropdown",
+          "displayName": "Fiscal Year"
+        },
+        {
+          "id": "v_slicer_period",
+          "type": "slicer",
+          "position": { "x": 224, "y": 72, "width": 200, "height": 48 },
+          "field": "silver_dim_date[fiscal_period]",
+          "slicerType": "dropdown",
+          "displayName": "Period (Month)"
+        },
+        {
+          "id": "v_slicer_entity",
+          "type": "slicer",
+          "position": { "x": 432, "y": 72, "width": 280, "height": 48 },
+          "field": "silver_dim_entity[entity_name]",
+          "slicerType": "dropdown",
+          "displayName": "Legal Entity",
+          "multiSelect": true
+        }
+      ]
+    },
+
+    {
+      "id": "section_kpi_row",
+      "displayName": "KPI Cards Row",
+      "_layout_note": "Six KPI cards evenly distributed across the full width, y=136, height=112.",
+      "visuals": [
+        {
+          "id": "v_kpi_revenue",
+          "type": "card",
+          "position": { "x": 16, "y": 136, "width": 290, "height": 112 },
+          "measure": "[Revenue]",
+          "displayName": "Revenue",
+          "formatString": "#,0,, \" M HUF\"",
+          "kpiTarget": "[Revenue Budget]",
+          "kpiDirection": "positive-is-good",
+          "conditionalFormatting": {
+            "backgroundColorRules": [
+              { "condition": "[Revenue RAG] = \"RED\"",   "color": "#FDECEA" },
+              { "condition": "[Revenue RAG] = \"AMBER\"", "color": "#FFF8E1" },
+              { "condition": "[Revenue RAG] = \"GREEN\"", "color": "#E8F5E9" }
+            ]
+          },
+          "subtitle": "vs Budget",
+          "calloutValue": "[Revenue Variance %]"
+        },
+        {
+          "id": "v_kpi_ebitda",
+          "type": "card",
+          "position": { "x": 322, "y": 136, "width": 290, "height": 112 },
+          "measure": "[EBITDA]",
+          "displayName": "EBITDA",
+          "formatString": "#,0,, \" M HUF\"",
+          "kpiTarget": null,
+          "conditionalFormatting": {
+            "backgroundColorRules": [
+              { "condition": "[EBITDA RAG] = \"RED\"",   "color": "#FDECEA" },
+              { "condition": "[EBITDA RAG] = \"AMBER\"", "color": "#FFF8E1" },
+              { "condition": "[EBITDA RAG] = \"GREEN\"", "color": "#E8F5E9" }
+            ]
+          },
+          "subtitle": "vs Budget",
+          "calloutValue": "[EBITDA Variance]"
+        },
+        {
+          "id": "v_kpi_ebitda_margin",
+          "type": "card",
+          "position": { "x": 628, "y": 136, "width": 290, "height": 112 },
+          "measure": "[EBITDA Margin %]",
+          "displayName": "EBITDA Margin",
+          "formatString": "0.0%",
+          "kpiTarget": null,
+          "subtitle": "Current period",
+          "calloutValue": null
+        },
+        {
+          "id": "v_kpi_net_profit",
+          "type": "card",
+          "position": { "x": 934, "y": 136, "width": 290, "height": 112 },
+          "measure": "[Net Profit]",
+          "displayName": "Net Profit",
+          "formatString": "#,0,, \" M HUF\"",
+          "kpiTarget": null,
+          "subtitle": "HU GAAP mérleg szerinti eredmény",
+          "calloutValue": null
+        },
+        {
+          "id": "v_kpi_fcf",
+          "type": "card",
+          "position": { "x": 1240, "y": 136, "width": 290, "height": 112 },
+          "measure": "[Free Cash Flow]",
+          "displayName": "Free Cash Flow",
+          "formatString": "#,0,, \" M HUF\"",
+          "kpiTarget": null,
+          "subtitle": "Operating CF − Capex",
+          "calloutValue": null
+        },
+        {
+          "id": "v_kpi_current_ratio",
+          "type": "card",
+          "position": { "x": 1546, "y": 136, "width": 358, "height": 112 },
+          "measure": "[Current Ratio]",
+          "displayName": "Current Ratio",
+          "formatString": "0.00",
+          "kpiTarget": { "value": 1.5, "direction": "positive-is-good" },
+          "subtitle": "Target ≥ 1.5",
+          "conditionalFormatting": {
+            "fontColorRules": [
+              { "condition": "[Current Ratio] < 1.0",  "color": "#C62828" },
+              { "condition": "[Current Ratio] < 1.5",  "color": "#F57C00" },
+              { "condition": "[Current Ratio] >= 1.5", "color": "#2E7D32" }
+            ]
+          }
+        }
+      ]
+    },
+
+    {
+      "id": "section_charts_top",
+      "displayName": "Primary Charts",
+      "_layout_note": "Two charts side-by-side in the upper-middle band, y=264, height=268.",
+      "visuals": [
+        {
+          "id": "v_revenue_trend",
+          "type": "lineChart",
+          "position": { "x": 16, "y": 264, "width": 920, "height": 268 },
+          "displayName": "Revenue vs Budget — Monthly Trend",
+          "xAxis": {
+            "field": "silver_dim_date[fiscal_period]",
+            "displayName": "Period"
+          },
+          "yAxis": {
+            "displayName": "Amount (M HUF)",
+            "formatString": "#,0,, \" M HUF\""
+          },
+          "series": [
+            {
+              "id": "s_revenue_actual",
+              "measure": "[Revenue]",
+              "displayName": "Revenue Actual",
+              "color": "#1B3A6B",
+              "lineStyle": "solid",
+              "lineWidth": 2,
+              "markerEnabled": true
+            },
+            {
+              "id": "s_revenue_budget",
+              "measure": "[Revenue Budget]",
+              "displayName": "Revenue Budget",
+              "color": "#90A4AE",
+              "lineStyle": "dashed",
+              "lineWidth": 1.5,
+              "markerEnabled": false
+            }
+          ],
+          "legend": { "position": "bottom", "enabled": true },
+          "dataLabels": { "enabled": false },
+          "analytics": {
+            "trendLine": { "enabled": false },
+            "averageLine": { "measure": "[Revenue]", "displayName": "Avg Revenue", "enabled": true }
+          },
+          "tooltip": {
+            "additionalMeasures": ["[Revenue Variance]", "[Revenue Variance %]"]
+          }
+        },
+        {
+          "id": "v_pl_waterfall",
+          "type": "waterfallChart",
+          "position": { "x": 952, "y": 264, "width": 650, "height": 268 },
+          "displayName": "P&L Bridge — Revenue to Net Profit",
+          "_note": "Waterfall shows the build-up from Revenue to Net Profit via EBITDA bridge components. Requires a manually ordered axis using a supporting bridge table or ranked measures.",
+          "category": {
+            "field": "_PLBridgeOrder[step_label]",
+            "_note": "A calculated bridge table (PLBridgeOrder) must exist in the model with columns: step_order (int), step_label (text), step_type (increase|decrease|total)."
+          },
+          "value": "[PL Bridge Amount]",
+          "sentinel": "[PL Bridge Type]",
+          "colors": {
+            "increase": "#2E7D32",
+            "decrease": "#C62828",
+            "total":    "#1B3A6B"
+          },
+          "dataLabels": { "enabled": true, "formatString": "#,0,, \" M\"" },
+          "legend": { "enabled": false }
+        }
+      ]
+    },
+
+    {
+      "id": "section_charts_bottom",
+      "displayName": "Detail Charts",
+      "_layout_note": "Two charts side-by-side in the lower-middle band, y=548, height=268.",
+      "visuals": [
+        {
+          "id": "v_ebitda_margin_scatter",
+          "type": "scatterChart",
+          "position": { "x": 16, "y": 548, "width": 640, "height": 268 },
+          "displayName": "EBITDA Margin vs Revenue Growth — by Entity",
+          "xAxis": {
+            "measure": "[Revenue YoY %]",
+            "displayName": "Revenue YoY Growth %",
+            "formatString": "+0.0%;-0.0%"
+          },
+          "yAxis": {
+            "measure": "[EBITDA Margin %]",
+            "displayName": "EBITDA Margin %",
+            "formatString": "0.0%"
+          },
+          "details": { "field": "silver_dim_entity[entity_name]" },
+          "size": { "measure": "[Revenue]", "displayName": "Revenue" },
+          "color": { "field": "silver_dim_entity[entity_name]" },
+          "tooltip": {
+            "additionalMeasures": ["[Revenue]", "[EBITDA]", "[Net Profit]"]
+          },
+          "quadrantLines": {
+            "xLine": { "value": 0, "color": "#90A4AE", "lineStyle": "dashed" },
+            "yLine": { "value": 0.1, "color": "#90A4AE", "lineStyle": "dashed" }
+          }
+        },
+        {
+          "id": "v_cashflow_bars",
+          "type": "clusteredBarChart",
+          "position": { "x": 672, "y": 548, "width": 600, "height": 268 },
+          "displayName": "Cash Flow Components",
+          "yAxis": {
+            "field": "silver_dim_date[fiscal_period]",
+            "displayName": "Period"
+          },
+          "xAxis": {
+            "displayName": "Amount (M HUF)",
+            "formatString": "#,0,, \" M HUF\""
+          },
+          "series": [
+            {
+              "measure": "[Operating Cash Flow]",
+              "displayName": "Operating CF",
+              "color": "#1B3A6B"
+            },
+            {
+              "measure": "[Investing Cash Flow]",
+              "displayName": "Investing CF",
+              "color": "#42A5F5"
+            },
+            {
+              "measure": "[Financing Cash Flow]",
+              "displayName": "Financing CF",
+              "color": "#66BB6A"
+            },
+            {
+              "measure": "[Free Cash Flow]",
+              "displayName": "Free Cash Flow",
+              "color": "#FFA726",
+              "lineStyle": "marker-only"
+            }
+          ],
+          "legend": { "position": "bottom", "enabled": true },
+          "dataLabels": { "enabled": false }
+        },
+        {
+          "id": "v_dso_dpo_line",
+          "type": "lineChart",
+          "position": { "x": 1288, "y": 548, "width": 616, "height": 268 },
+          "displayName": "Working Capital Efficiency — DSO vs DPO",
+          "xAxis": {
+            "field": "silver_dim_date[fiscal_period]",
+            "displayName": "Period"
+          },
+          "yAxis": {
+            "displayName": "Days",
+            "formatString": "0.0 \" days\""
+          },
+          "series": [
+            {
+              "measure": "[Days Sales Outstanding]",
+              "displayName": "DSO",
+              "color": "#EF5350",
+              "lineWidth": 2
+            },
+            {
+              "measure": "[Days Payable Outstanding]",
+              "displayName": "DPO",
+              "color": "#42A5F5",
+              "lineWidth": 2
+            }
+          ],
+          "legend": { "position": "bottom", "enabled": true },
+          "referenceLine": {
+            "measure": null,
+            "constantValue": 45,
+            "displayName": "DSO Target (45d)",
+            "color": "#E57373",
+            "lineStyle": "dashed"
+          }
+        }
+      ]
+    },
+
+    {
+      "id": "section_table",
+      "displayName": "Entity P&L Summary Table",
+      "_layout_note": "Full-width matrix table at the bottom, y=832, height=192.",
+      "visuals": [
+        {
+          "id": "v_entity_pl_table",
+          "type": "matrix",
+          "position": { "x": 16, "y": 832, "width": 1888, "height": 192 },
+          "displayName": "Entity P&L Summary — YTD",
+          "rows": [
+            { "field": "silver_dim_entity[entity_name]", "displayName": "Entity" }
+          ],
+          "columns": [],
+          "values": [
+            { "measure": "[Revenue]",           "displayName": "Revenue (M HUF)",         "formatString": "#,0,, \" M\"" },
+            { "measure": "[Revenue Budget]",    "displayName": "Budget (M HUF)",           "formatString": "#,0,, \" M\"" },
+            { "measure": "[Revenue Variance %]","displayName": "Rev Var %",                "formatString": "+0.0%;-0.0%" },
+            { "measure": "[Gross Margin %]",    "displayName": "Gross Margin %",           "formatString": "0.0%" },
+            { "measure": "[EBITDA]",            "displayName": "EBITDA (M HUF)",           "formatString": "#,0,, \" M\"" },
+            { "measure": "[EBITDA Margin %]",   "displayName": "EBITDA Margin %",          "formatString": "0.0%" },
+            { "measure": "[Net Profit]",        "displayName": "Net Profit (M HUF)",       "formatString": "#,0,, \" M\"" },
+            { "measure": "[Free Cash Flow]",    "displayName": "Free Cash Flow (M HUF)",   "formatString": "#,0,, \" M\"" },
+            { "measure": "[Current Ratio]",     "displayName": "Current Ratio",            "formatString": "0.00" },
+            { "measure": "[Revenue RAG]",       "displayName": "RAG",                      "formatString": "@", "hidden": true,
+              "_note": "RAG column is used only for conditional formatting of the Revenue Var% cell, not displayed directly." }
+          ],
+          "subtotals": {
+            "rows": true,
+            "rowSubtotalLabel": "Group Total"
+          },
+          "conditionalFormatting": [
+            {
+              "column": "[Revenue Variance %]",
+              "type": "fontColor",
+              "rules": [
+                { "condition": "[Revenue Variance %] < -0.05", "color": "#C62828" },
+                { "condition": "[Revenue Variance %] < 0",     "color": "#E65100" },
+                { "condition": "[Revenue Variance %] >= 0",    "color": "#2E7D32" }
+              ]
+            },
+            {
+              "column": "[EBITDA Margin %]",
+              "type": "dataBar",
+              "dataBarConfig": {
+                "positiveBarColor": "#1B3A6B",
+                "negativeBarColor": "#C62828",
+                "axisPosition": "automatic"
+              }
+            }
+          ],
+          "style": {
+            "headerBackground": "#1B3A6B",
+            "headerFontColor": "#FFFFFF",
+            "bandedRows": true,
+            "gridLines": "horizontal",
+            "fontSize": 11
+          }
+        }
+      ]
+    },
+
+    {
+      "id": "section_narrative",
+      "displayName": "AI Narrative",
+      "_layout_note": "Narrow narrative panel at x=1618, y=264 — to the right of the P&L waterfall chart, sharing the primary charts row. Does not overlap any other visual.",
+      "visuals": [
+        {
+          "id": "v_smart_narrative",
+          "type": "smartNarrative",
+          "position": { "x": 1618, "y": 264, "width": 286, "height": 268 },
+          "_note": "Smart Narrative visual auto-generates bullet-point commentary summarising Revenue vs Budget, EBITDA trend, and FCF status for the selected period and entity filter.",
+          "dynamicValues": [
+            { "measure": "[Revenue]",          "displayName": "Revenue" },
+            { "measure": "[Revenue Variance %]","displayName": "Revenue variance" },
+            { "measure": "[EBITDA Margin %]",  "displayName": "EBITDA margin" },
+            { "measure": "[Free Cash Flow]",   "displayName": "Free Cash Flow" },
+            { "measure": "[Current Ratio]",    "displayName": "Current ratio" }
+          ],
+          "showTitle": true,
+          "titleText": "Executive Summary — AI Narrative",
+          "style": {
+            "background": "#FFFFFF",
+            "border": "1px solid #CFD8DC",
+            "fontSize": 12
+          }
+        }
+      ]
+    }
+  ],
+
+  "interactions": {
+    "crossFilter": "all",
+    "editInteractions": [
+      {
+        "source": "v_revenue_trend",
+        "target": "v_entity_pl_table",
+        "type": "filter"
+      },
+      {
+        "source": "v_ebitda_margin_scatter",
+        "target": "v_entity_pl_table",
+        "type": "filter"
+      },
+      {
+        "source": "v_slicer_year",
+        "target": "all",
+        "type": "filter"
+      },
+      {
+        "source": "v_slicer_period",
+        "target": "all",
+        "type": "filter"
+      },
+      {
+        "source": "v_slicer_entity",
+        "target": "all",
+        "type": "filter"
+      }
+    ]
+  },
+
+  "bookmarks": [
+    {
+      "id": "bm_ytd_view",
+      "displayName": "YTD View",
+      "filters": [
+        { "field": "silver_dim_date[fiscal_period]", "operator": "lte", "value": "current_period" }
+      ]
+    },
+    {
+      "id": "bm_full_year",
+      "displayName": "Full Year View",
+      "filters": []
+    }
+  ],
+
+  "supportingDAX": {
+    "_note": "The following DAX measures must be added to FIP_Main in addition to the standard library in FIP_DAX_Measures.dax. They are required by visuals on this page.",
+    "measures": [
+      {
+        "name": "[Revenue YoY %]",
+        "displayFolder": "VAR_ — Variance vs Budget",
+        "formatString": "+0.0%;-0.0%",
+        "dax": "VAR py_revenue = CALCULATE([Revenue], SAMEPERIODLASTYEAR(silver_dim_date[calendar_date])) RETURN DIVIDE([Revenue] - py_revenue, ABS(py_revenue), BLANK())",
+        "description": "Revenue year-over-year growth percentage. BLANK when prior-year revenue is zero or absent."
+      },
+      {
+        "name": "[EBITDA RAG]",
+        "displayFolder": "RAG_ — Status Indicators",
+        "formatString": "@",
+        "dax": "VAR var_pct = DIVIDE([EBITDA Variance], ABS(CALCULATE(SUM(agg_pl_monthly[ebitda_budget]), NOT ISBLANK(agg_pl_monthly[ebitda_budget]))), BLANK()) RETURN SWITCH(TRUE(), ISBLANK(var_pct), \"GREY\", var_pct >= 0.00, \"GREEN\", var_pct >= -0.05, \"AMBER\", \"RED\")",
+        "description": "Traffic-light status for EBITDA vs budget. GREEN ≥ 0%, AMBER -5% to 0%, RED < -5%."
+      },
+      {
+        "name": "[PL Bridge Amount]",
+        "displayFolder": "PL_ — Profitability",
+        "formatString": "#,0,, \" M HUF\"",
+        "dax": "SWITCH(SELECTEDVALUE(_PLBridgeOrder[step_label]), \"Revenue\", [Revenue], \"(COGS)\", -[COGS], \"Gross Profit\", [Gross Profit], \"Other OI\", [Other Operating Income], \"(Personnel)\", -[Personnel Expense], \"(Other OpEx)\", -[Other OpEx], \"EBITDA\", [EBITDA], \"(D&A)\", -CALCULATE(SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]), gold_fact_gl_transaction[pl_line_item]=\"Depreciation\"), \"Fin. Items (net)\", CALCULATE(SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]), gold_fact_gl_transaction[pl_line_item]=\"Financial Income\") - CALCULATE(SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]), gold_fact_gl_transaction[pl_line_item]=\"Financial Expense\"), \"(Tax)\", -CALCULATE(SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]), gold_fact_gl_transaction[pl_line_item]=\"Tax Expense\"), \"Net Profit\", [Net Profit], BLANK())",
+        "description": "Step values for the P&L waterfall bridge chart. Requires _PLBridgeOrder calculated table."
+      },
+      {
+        "name": "[PL Bridge Type]",
+        "displayFolder": "PL_ — Profitability",
+        "formatString": "@",
+        "dax": "SWITCH(SELECTEDVALUE(_PLBridgeOrder[step_label]), \"Revenue\", \"total\", \"Gross Profit\", \"total\", \"EBITDA\", \"total\", \"Net Profit\", \"total\", IF([PL Bridge Amount] >= 0, \"increase\", \"decrease\"))",
+        "description": "Sentinel field for waterfall chart: 'total', 'increase', or 'decrease'."
+      }
+    ],
+    "calculatedTables": [
+      {
+        "name": "_PLBridgeOrder",
+        "dax": "DATATABLE(\"step_order\", INTEGER, \"step_label\", STRING, {{1,\"Revenue\"},{2,\"(COGS)\"},{3,\"Gross Profit\"},{4,\"Other OI\"},{5,\"(Personnel)\"},{6,\"(Other OpEx)\"},{7,\"EBITDA\"},{8,\"(D&A)\"},{9,\"Fin. Items (net)\"},{10,\"(Tax)\"},{11,\"Net Profit\"}})",
+        "description": "Ordered bridge step table for the P&L waterfall chart. Static — no refresh required. In the Power BI model, set _PLBridgeOrder[step_label] to Sort by column = _PLBridgeOrder[step_order] so the waterfall uses the intended business order instead of alphabetical sorting."
+      }
+    ]
+  },
+
+  "implementationChecklist": [
+    "Add _PLBridgeOrder calculated table via Tabular Editor or TMSL before deploying this page.",
+    "In the Power BI model, configure _PLBridgeOrder[step_label] with Sort by column = _PLBridgeOrder[step_order] so the waterfall bridge renders in business order rather than alphabetical order.",
+    "Add supporting DAX measures ([Revenue YoY %], [EBITDA RAG], [PL Bridge Amount], [PL Bridge Type]) to FIP_Main dataset.",
+    "Validate all slicer fields are accessible under CFO RLS role (empty DAX filter — all entities visible).",
+    "Import page into Power BI Desktop and adjust visual layout positions to match the JSON coordinates.",
+    "Enable Smart Narrative on the narrative visual and verify dynamic value bindings.",
+    "Set page background colour to #F5F6FA and header textbox background to #1B3A6B.",
+    "Add bookmarks YTD View and Full Year View using the Power BI Bookmarks pane.",
+    "Publish to FIP-Production workspace and confirm refresh schedule (every 4h + on-demand per DASHBOARD_SPECIFICATIONS.md).",
+    "Run PowerBI/Dax_tests/run_dax_tests.py against the updated dataset to validate new measures."
+  ]
+}
