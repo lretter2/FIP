@@ -35,7 +35,8 @@ POST /api/rls_sync
 Body (JSON):
     {
         "dry_run":     false,          // optional, default false
-        "role_filter": null            // optional, sync only this role
+        "role_filter": null,           // optional, sync only this role
+        "include_log": false           // optional, return captured log (redacted); default false
     }
 
 Response (JSON):
@@ -44,20 +45,31 @@ Response (JSON):
         "roles_synced": 5,
         "total_changes": 3,
         "timestamp":    "2026-04-10T05:00:12Z",
-        "detail":       [...]
+        "detail":       [...],
+        "log":          "<redacted log — only present when include_log=true>"
     }
 
 Response on failure (HTTP 500):
     {
         "sync_status":   "failed",
         "error_message": "...",
-        "timestamp":     "..."
+        "timestamp":     "...",
+        "log":           "<redacted log — only present when include_log=true>"
     }
+
+SECURITY NOTES
+--------------
+- Log output may contain UPNs/email addresses (PII). Log is only returned
+  when the caller explicitly sets include_log=true, is redacted (emails
+  replaced with <redacted@domain>) and truncated to LOG_MAX_CHARS characters.
+- The x-functions-key header authenticates callers. ADF WebActivity should
+  store the key in a Key Vault-linked ADF parameter, not in plaintext.
 """
 
 import json
 import logging
 import os
+import re
 import sys
 import io
 from datetime import datetime, timezone
@@ -67,6 +79,21 @@ import azure.functions as func
 # Add parent dir so sync_rls_aad module is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+# Maximum characters of log text returned in responses (prevents very large payloads).
+LOG_MAX_CHARS = 8_000
+
+# Regex matching email addresses so they can be redacted before leaving the function.
+_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+
+
+def _sanitise_log(raw: str) -> str:
+    """Redact email addresses and truncate the captured log to LOG_MAX_CHARS."""
+    redacted = _EMAIL_RE.sub(lambda m: f"<redacted@{m.group(0).split('@', 1)[1]}>", raw)
+    if len(redacted) > LOG_MAX_CHARS:
+        redacted = redacted[-LOG_MAX_CHARS:]  # keep the most-recent (tail) portion
+        redacted = f"[...truncated to last {LOG_MAX_CHARS} chars...]\n" + redacted
+    return redacted
+
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     """Azure Function entry point — HTTP trigger."""
@@ -75,12 +102,14 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     # Parse request body
     try:
-        body     = req.get_json() if req.get_body() else {}
-        dry_run  = bool(body.get("dry_run", False))
+        body        = req.get_json() if req.get_body() else {}
+        dry_run     = bool(body.get("dry_run", False))
         role_filter = body.get("role_filter", None)
+        include_log = bool(body.get("include_log", False))
     except ValueError:
         dry_run     = False
         role_filter = None
+        include_log = False
 
     # Capture log output for response
     log_stream  = io.StringIO()
@@ -122,8 +151,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             "dry_run":        dry_run,
             "timestamp":      start_ts.isoformat(),
             "detail":         changes_tracker["roles"],
-            "log":            log_stream.getvalue(),
         }
+        if include_log:
+            response_body["log"] = _sanitise_log(log_stream.getvalue())
 
         logging.info(f"RLS sync succeeded: {changes_tracker['total']} changes across {len(changes_tracker['roles'])} roles")
 
@@ -139,8 +169,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             "sync_status":   "failed",
             "error_message": str(exc),
             "timestamp":     start_ts.isoformat(),
-            "log":           log_stream.getvalue(),
         }
+        if include_log:
+            response_body["log"] = _sanitise_log(log_stream.getvalue())
         return func.HttpResponse(
             json.dumps(response_body),
             status_code=500,
