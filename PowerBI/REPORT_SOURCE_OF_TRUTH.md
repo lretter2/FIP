@@ -21,6 +21,6 @@ If the project moves to PBIP in the future, update this file and the CI/CD pipel
 
 `FIP_PowerBI_Template.pbit` is a binary Power BI template file. Binary files cannot be diffed or reviewed in pull requests, meaning visual and report-layer changes are not auditable through standard code review.
 
-**Accepted risk:** The report layer is considered stable. All security-relevant configuration (RLS, DAX measures, TMSL) is maintained in plain-text source files that are fully auditable.
+**Accepted risk:** The report layer is considered stable. DAX measures and TMSL assets are maintained in plain-text source files and are auditable in git. RLS role definitions and membership intent are declared in `PowerBI/Rls/rls_roles.json`, but the effective dataset role filters enforced in the deployed artifact are not currently fully validated or enforced from those text files alone.
 
 **Future remediation:** Migrate to PBIP (Power BI Project) format, which stores report definitions as human-readable JSON/XML files and enables diff-based code review of visual and report-layer changes. When this migration occurs, update this file and the CI/CD pipeline accordingly.
