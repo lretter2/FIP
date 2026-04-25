@@ -106,8 +106,10 @@ dbt, Bicep, and Power BI.
 ## 7. Performance
 
 - Avoid N+1 queries; batch database calls and use `pandas` bulk reads where possible.
-- Cache Key Vault secret reads with `@lru_cache` or `functools.cache`; secrets do not
-  change between requests.
+- Cache Key Vault secret reads only with bounded/TTL caching or per-run caching; do not
+  recommend unbounded `@lru_cache`/`functools.cache` for secrets because Key Vault
+  secrets may rotate between requests. Document refresh/invalidation expectations so
+  rotated secrets are picked up safely.
 - Use `asyncio`/`httpx` for concurrent external API calls (e.g. MNB FX, OpenAI).
 - dbt incremental models (`+incremental_strategy: merge`) must be used for large fact
   tables; full refresh is only acceptable for seed/reference tables.
