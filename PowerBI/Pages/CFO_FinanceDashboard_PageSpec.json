@@ -554,6 +554,6 @@
     "Set page background colour to #F5F6FA and header textbox background to #1B3A6B.",
     "Add bookmarks YTD View and Full Year View using the Power BI Bookmarks pane.",
     "Publish to FIP-Production workspace and confirm refresh schedule (every 4h + on-demand per DASHBOARD_SPECIFICATIONS.md).",
-    "Run dax_tests/run_dax_tests.py against the updated dataset to validate new measures."
+    "Run PowerBI/Dax_tests/run_dax_tests.py against the updated dataset to validate new measures."
   ]
 }
