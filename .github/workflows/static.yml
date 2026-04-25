@@ -33,11 +33,30 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Build static site
+        run: |
+          mkdir -p site
+          cat <<'EOF' > site/index.html
+          <!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>GitHub Pages</title>
+            </head>
+            <body>
+              <main>
+                <h1>GitHub Pages site</h1>
+                <p>This Pages workflow now publishes only the generated site artifact.</p>
+              </main>
+            </body>
+          </html>
+          EOF
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: '.'
+          # Upload built static site only
+          path: './site'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
