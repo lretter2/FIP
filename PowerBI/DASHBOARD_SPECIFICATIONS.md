@@ -1,4 +1,4 @@
-﻿# FIP Power BI Dashboard Specifications
+# FIP Power BI Dashboard Specifications
 **Phase 3 Deliverable — 5 Persona Dashboards**
 Financial Intelligence Platform · HU GAAP · Version 1.1
 
