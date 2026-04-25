@@ -6,7 +6,7 @@ External dependencies (pyodbc, openai, db_utils) are stubbed at import time.
 import sys
 import json
 from types import ModuleType
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 # Stub heavy Azure / OpenAI modules before importing the module under test
 for _mod in (
