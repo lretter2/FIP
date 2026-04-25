@@ -879,9 +879,26 @@ if FASTAPI_AVAILABLE:
     const keys = Object.keys(first).map(k => k.toLowerCase());
 
     function getCol(row, ...names) {
-      for (const n of names) {
-        const match = Object.keys(row).find(k => k.toLowerCase().includes(n));
-        if (match !== undefined && row[match] !== null) return parseFloat(row[match]);
+      const keyMap = Object.keys(row).reduce((acc, key) => {
+        acc[key.toLowerCase()] = key;
+        return acc;
+      }, {});
+      const aliases = {
+        revenue: ["total_revenue"],
+        ebitda: ["total_ebitda"],
+        net_profit: ["net_income", "profit_after_tax"],
+        free_cash_flow: ["fcf"],
+        fcf: ["free_cash_flow"],
+        revenue_variance_pct: ["revenue_yoy_pct"]
+      };
+
+      for (const rawName of names) {
+        const name = rawName.toLowerCase();
+        const candidates = [name, ...(aliases[name] || [])];
+        for (const candidate of candidates) {
+          const match = keyMap[candidate.toLowerCase()];
+          if (match !== undefined && row[match] !== null) return parseFloat(row[match]);
+        }
       }
       return null;
     }
