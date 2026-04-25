@@ -306,3 +306,146 @@ class TestGetSchemaPrefix:
             request_id="r1",
         )
         assert router.get_schema_prefix(ctx) == ""
+
+
+# ── require_tenant decorator ──────────────────────────────────────────────────
+
+class TestRequireTenant:
+    def _make_context(self) -> TenantContext:
+        return TenantContext(
+            tenant_id="tenant_1",
+            user_id="alice",
+            company_id=None,
+            database=_make_db("tenant_1"),
+            request_id="r1",
+        )
+
+    def test_raises_when_no_context_kwarg(self, router):
+        @router.require_tenant
+        def my_func():
+            return "ok"
+
+        with pytest.raises(TenantAuthenticationError, match="TenantContext not provided"):
+            my_func()
+
+    def test_passes_through_when_context_provided(self, router):
+        @router.require_tenant
+        def my_func(context=None):
+            return f"tenant:{context.tenant_id}"
+
+        ctx = self._make_context()
+        result = my_func(context=ctx)
+        assert result == "tenant:tenant_1"
+
+    def test_preserves_function_name(self, router):
+        @router.require_tenant
+        def my_special_func():
+            pass
+
+        assert my_special_func.__name__ == "my_special_func"
+
+    def test_passes_positional_and_keyword_args_through(self, router):
+        @router.require_tenant
+        def my_func(x, y, context=None):
+            return x + y
+
+        ctx = self._make_context()
+        result = my_func(1, 2, context=ctx)
+        assert result == 3
+
+
+# ── Extraction strategies (standalone) ────────────────────────────────────────
+
+class TestJWTExtractionStrategy:
+    def test_valid_bearer_token_returns_auth_result(self, router, monkeypatch):
+        from tenant_router import JWTExtractionStrategy
+        strategy = JWTExtractionStrategy(router)
+        token = _make_jwt({"tenant_id": "tenant_1", "user_id": "alice@corp.com"})
+        result = strategy.extract(f"Bearer {token}", {})
+        assert result is not None
+        assert result.tenant_id == "tenant_1"
+        assert result.user_id == "alice@corp.com"
+        assert result.method == "JWT"
+
+    def test_non_bearer_header_returns_none(self, router):
+        from tenant_router import JWTExtractionStrategy
+        strategy = JWTExtractionStrategy(router)
+        assert strategy.extract("api_key_t1", {}) is None
+
+    def test_none_header_returns_none(self, router):
+        from tenant_router import JWTExtractionStrategy
+        strategy = JWTExtractionStrategy(router)
+        assert strategy.extract(None, {}) is None
+
+    def test_invalid_jwt_returns_none_not_raises(self, router):
+        from tenant_router import JWTExtractionStrategy
+        strategy = JWTExtractionStrategy(router)
+        # Malformed token — strategy should swallow the error and return None
+        result = strategy.extract("Bearer not.a.jwt", {})
+        assert result is None
+
+    def test_company_id_propagated(self, router):
+        from tenant_router import JWTExtractionStrategy
+        strategy = JWTExtractionStrategy(router)
+        token = _make_jwt({"tenant_id": "tenant_1", "user_id": "alice@corp.com", "company_id": "E001"})
+        result = strategy.extract(f"Bearer {token}", {})
+        assert result.company_id == "E001"
+
+
+class TestAPIKeyExtractionStrategy:
+    def test_known_api_key_returns_auth_result(self, router):
+        from tenant_router import APIKeyExtractionStrategy
+        strategy = APIKeyExtractionStrategy(router)
+        result = strategy.extract("api_key_t1", {})
+        assert result is not None
+        assert result.tenant_id == "tenant_1"
+        assert result.method == "API_KEY"
+
+    def test_unknown_api_key_returns_none(self, router):
+        from tenant_router import APIKeyExtractionStrategy
+        strategy = APIKeyExtractionStrategy(router)
+        assert strategy.extract("no_such_key", {}) is None
+
+    def test_bearer_prefixed_header_returns_none(self, router):
+        from tenant_router import APIKeyExtractionStrategy
+        strategy = APIKeyExtractionStrategy(router)
+        # Bearer prefix belongs to JWT strategy, not API key
+        token = _make_jwt({"tenant_id": "tenant_1"})
+        assert strategy.extract(f"Bearer {token}", {}) is None
+
+    def test_none_header_returns_none(self, router):
+        from tenant_router import APIKeyExtractionStrategy
+        strategy = APIKeyExtractionStrategy(router)
+        assert strategy.extract(None, {}) is None
+
+    def test_user_id_set_to_unknown(self, router):
+        from tenant_router import APIKeyExtractionStrategy
+        strategy = APIKeyExtractionStrategy(router)
+        result = strategy.extract("api_key_t1", {})
+        assert result.user_id == "unknown"
+
+
+class TestHeaderExtractionStrategy:
+    def test_x_tenant_id_header_returns_auth_result(self, router):
+        from tenant_router import HeaderExtractionStrategy
+        strategy = HeaderExtractionStrategy(router)
+        result = strategy.extract(None, {"X-Tenant-ID": "tenant_1"})
+        assert result is not None
+        assert result.tenant_id == "tenant_1"
+        assert result.method == "HEADER"
+
+    def test_missing_header_returns_none(self, router):
+        from tenant_router import HeaderExtractionStrategy
+        strategy = HeaderExtractionStrategy(router)
+        assert strategy.extract(None, {}) is None
+
+    def test_wrong_header_name_returns_none(self, router):
+        from tenant_router import HeaderExtractionStrategy
+        strategy = HeaderExtractionStrategy(router)
+        assert strategy.extract(None, {"X-Tenant": "tenant_1"}) is None
+
+    def test_user_id_set_to_unknown(self, router):
+        from tenant_router import HeaderExtractionStrategy
+        strategy = HeaderExtractionStrategy(router)
+        result = strategy.extract(None, {"X-Tenant-ID": "tenant_1"})
+        assert result.user_id == "unknown"
