@@ -40,7 +40,7 @@ dbt, Bicep, and Power BI.
 
 ## 3. Python Standards
 
-- **Python 3.10+** is the minimum (CI workflow pins 3.10; `requirements.txt` targets 3.11+; new code should target 3.11+ to use the latest type-annotation syntax, but must not break on 3.10).
+- **Python 3.10+** is the current compatibility baseline for contributors: CI runs Python 3.10 today, so all new code must run on 3.10 and must not rely on Python 3.11-only syntax or features. Note: `python/requirements.txt` currently states "Python version required: 3.11+"; if the supported runtime is raised, update CI and this guidance together.
 - Follow PEP 8; the CI linter is `flake8` with `--max-line-length=127`.
 - Use type annotations for all function signatures and public class attributes.
 - Functions should be focused and under 50 lines; split larger functions into helpers.
