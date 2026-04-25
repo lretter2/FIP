@@ -40,6 +40,8 @@ from commentary_generator import (
     _build_alerts,
     write_commentary_to_queue,
     process_commentaries,
+    validate_fact_pack,
+    generate_commentary,
     MATERIALITY_THRESHOLD,
 )
 
@@ -523,3 +525,87 @@ class TestProcessCommentaries:
         statuses = {r["role"]: r["status"] for r in results}
         assert statuses["CFO"] == "FAILED"
         assert statuses["CEO"] == "QUEUED"
+
+
+# ── validate_fact_pack ─────────────────────────────────────────────────────
+
+class TestValidateFactPack:
+    def _make_valid_fact_pack(self):
+        return {
+            "report_metadata": {
+                "entity_code": "ACME_HU",
+                "period_key": 202601,
+                "gaap_basis": "HU GAAP (2000/C Act)",
+                "reporting_currency": "HUF",
+                "generated_at": "2026-04-25T09:45:38Z",
+                "materiality_threshold_pct": 5.0,
+            },
+            "pl_summary": {
+                "revenue_current": "100.0M HUF",
+                "revenue_budget": "95.0M HUF",
+                "revenue_vs_budget_pct": "5.3%",
+            },
+            "balance_sheet_highlights": {
+                "total_assets": "200.0M HUF",
+                "total_equity": "80.0M HUF",
+            },
+            "liquidity_highlights": {
+                "current_ratio": "1.80x",
+                "dso_days": "45 days",
+            },
+            "cash_flow": {
+                "operating_cash_flow": "25.0M HUF",
+                "free_cash_flow": "20.0M HUF",
+            },
+            "alerts": [],
+        }
+
+    def test_valid_fact_pack_no_exception(self):
+        fact_pack = self._make_valid_fact_pack()
+        validate_fact_pack(fact_pack)  # Should not raise
+
+    def test_missing_required_field_logs_warning(self, caplog):
+        import logging
+        fact_pack = self._make_valid_fact_pack()
+        del fact_pack["report_metadata"]["entity_code"]
+        with caplog.at_level(logging.WARNING):
+            validate_fact_pack(fact_pack)
+        assert any("validation" in record.message.lower() for record in caplog.records)
+
+    def test_missing_schema_file_logs_warning_not_raises(self, caplog):
+        import logging
+        fact_pack = self._make_valid_fact_pack()
+        with patch("commentary_generator.VALIDATION_SCHEMA_FILE", "/nonexistent/schema.json"):
+            with caplog.at_level(logging.WARNING):
+                validate_fact_pack(fact_pack)
+        assert any("validation" in record.message.lower() for record in caplog.records)
+
+
+# ── generate_commentary with Hungarian translation ──────────────────────────
+
+class TestGenerateCommentaryWithTranslation:
+    def _make_fact_pack(self):
+        return {
+            "report_metadata": {"entity_code": "ACME_HU", "period_key": 202601},
+            "pl_summary": {},
+            "alerts": [],
+        }
+
+    def test_english_generation_calls_api_once(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="Test commentary"))]
+        )
+        fact_pack = self._make_fact_pack()
+        generate_commentary(client, fact_pack, "CFO", language="en")
+        assert client.chat.completions.create.call_count == 1
+
+    def test_hungarian_language_calls_api_twice(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="Test output"))]
+        )
+        fact_pack = self._make_fact_pack()
+        with patch("commentary_generator.translate_commentary_to_hungarian", return_value="Translated"):
+            result = generate_commentary(client, fact_pack, "CFO", language="hu")
+            assert result == "Translated"
