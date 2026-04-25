@@ -16,6 +16,7 @@
       "role_name": "CFO",
       "description": "Full entity access, full financial data, no direct quarantine PII.",
       "dax_filter": "",
+      "_dax_filter_rationale": "Intentional: CFO has unrestricted entity scope per RLS matrix spec v1.1. Empty filter is an approved design decision, not an omission.",
       "aad_groups": [
         "FIP-Role-CFO",
         "FIP-Role-FinanceDirector"
@@ -26,6 +27,7 @@
       "role_name": "Controller",
       "description": "Full entity access plus audit tables including quarantine and DQ logs.",
       "dax_filter": "",
+      "_dax_filter_rationale": "Intentional: Controller has unrestricted entity scope per RLS matrix spec v1.1. Empty filter is an approved design decision, not an omission.",
       "aad_groups": [
         "FIP-Role-Controller",
         "FIP-Role-ChiefAccountant"
