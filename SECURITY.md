@@ -2,20 +2,25 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+The Financial Intelligence Platform (FIP) is a continuously deployed cloud-native platform, not a versioned software release. Security patches are applied to the production environment on an ongoing basis.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| Environment | Security Updates   |
+| ----------- | ------------------ |
+| `prod`      | :white_check_mark: |
+| `dev`       | :white_check_mark: |
+| `ci`        | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+If you discover a security vulnerability in FIP, please report it **privately** to the Platform Engineering team. Do **not** open a public GitHub issue for security vulnerabilities.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+**How to report:**
+
+1. Email the security contact at the address listed in the internal TEAMS channel `#fip-platform-security`.
+2. Include a description of the vulnerability, steps to reproduce, and potential impact.
+3. You will receive an acknowledgement within **48 hours**.
+4. A full assessment and remediation plan will be communicated within **14 days**.
+
+If the vulnerability is accepted, a fix will be prioritised based on severity (P1 critical issues are patched within 24 hours; P2 issues within 7 days). If the report is declined, you will receive an explanation.
+
+For detailed security architecture, controls, and compliance information see [`doc/SECURITY_AND_COMPLIANCE.md`](doc/SECURITY_AND_COMPLIANCE.md).

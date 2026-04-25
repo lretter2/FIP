@@ -1,4 +1,4 @@
-﻿# Power BI Report Source of Truth
+# Power BI Report Source of Truth
 
 Current decision (2026-04-20):
 - The canonical report template artifact is `PowerBI/FIP_PowerBI_Template.pbit`.

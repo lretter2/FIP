@@ -1,4 +1,4 @@
-﻿# Power BI RLS Architecture
+# Power BI RLS Architecture
 **Financial Intelligence Platform · Phase 3 · HU GAAP**
 
 ---
