@@ -1,36 +1,63 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Variance Fact Pack - HU GAAP 2026",
+  "title": "Variance Fact Pack — FIP Commentary Generator",
+  "description": "JSON schema for fact pack structure produced by _build_fact_sections() in commentary_generator.py",
   "type": "object",
-  "required": ["period_info", "kpis", "cash_position", "alerts"],
+  "required": ["report_metadata", "pl_summary", "balance_sheet_highlights", "liquidity_highlights", "cash_flow", "alerts"],
   "properties": {
-    "period_info": {
+    "report_metadata": {
       "type": "object",
-      "required": ["month", "year", "currency"],
+      "required": ["entity_code", "period_key"],
       "properties": {
-        "month": { "type": "string" },
-        "year": { "type": "integer", "const": 2026 },
-        "currency": { "type": "string", "enum": ["HUF", "EUR"] }
+        "entity_code": { "type": "string", "minLength": 1 },
+        "entity_name": { "type": "string" },
+        "period": { "type": "string" },
+        "period_key": { "type": "integer", "minimum": 100000, "maximum": 999999 },
+        "gaap_basis": { "type": "string" },
+        "reporting_currency": { "type": "string", "enum": ["HUF", "EUR", "USD"] },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "materiality_threshold_pct": { "type": "number", "minimum": 0 }
       }
     },
-    "kpis": {
+    "pl_summary": {
       "type": "object",
-      "required": ["revenue", "ebitda", "net_profit"],
       "properties": {
-        "revenue": { "$ref": "#/definitions/metric_comparison" },
-        "ebitda": { "$ref": "#/definitions/metric_comparison" },
-        "net_profit": { "$ref": "#/definitions/metric_comparison" },
-        "gross_margin": { "$ref": "#/definitions/metric_comparison" },
-        "dso": { "type": "number", "description": "Days Sales Outstanding" }
+        "revenue_current": { "type": ["string", "null"] },
+        "revenue_budget": { "type": ["string", "null"] },
+        "revenue_vs_budget_pct": { "type": ["string", "null"] },
+        "revenue_vs_py_pct": { "type": ["string", "null"] },
+        "gross_margin_pct": { "type": ["string", "null"] },
+        "ebitda_current": { "type": ["string", "null"] },
+        "ebitda_margin_pct": { "type": ["string", "null"] },
+        "net_profit_current": { "type": ["string", "null"] },
+        "net_profit_margin_pct": { "type": ["string", "null"] }
       }
     },
-    "cash_position": {
+    "balance_sheet_highlights": {
       "type": "object",
-      "required": ["cash_on_hand", "burn_rate_months", "fcf_trend"],
       "properties": {
-        "cash_on_hand": { "type": "number" },
-        "burn_rate_months": { "type": "number" },
-        "fcf_trend": { "type": "string", "enum": ["improving", "stable", "deteriorating"] }
+        "total_assets": { "type": ["string", "null"] },
+        "total_equity": { "type": ["string", "null"] },
+        "net_debt": { "type": ["string", "null"] },
+        "equity_ratio_pct": { "type": ["string", "null"] },
+        "net_debt_to_ebitda": { "type": ["string", "null"] }
+      }
+    },
+    "liquidity_highlights": {
+      "type": "object",
+      "properties": {
+        "current_ratio": { "type": ["string", "null"] },
+        "dso_days": { "type": ["string", "null"] },
+        "dpo_days": { "type": ["string", "null"] },
+        "cash_conversion_cycle_days": { "type": ["string", "null"] }
+      }
+    },
+    "cash_flow": {
+      "type": "object",
+      "properties": {
+        "operating_cash_flow": { "type": ["string", "null"] },
+        "free_cash_flow": { "type": ["string", "null"] },
+        "closing_cash_balance": { "type": ["string", "null"] }
       }
     },
     "alerts": {
@@ -38,21 +65,11 @@
       "items": {
         "type": "object",
         "properties": {
-          "metric": { "type": "string" },
-          "variance_pct": { "type": "number" },
-          "critical": { "type": "boolean" }
+          "kpi": { "type": "string" },
+          "value": { "type": ["string", "null"] },
+          "alert_tag": { "type": "string" },
+          "direction": { "type": "string", "enum": ["above target", "below target"] }
         }
-      }
-    }
-  },
-  "definitions": {
-    "metric_comparison": {
-      "type": "object",
-      "required": ["actual", "budget", "prior_year"],
-      "properties": {
-        "actual": { "type": "number" },
-        "budget": { "type": "number" },
-        "prior_year": { "type": "number" }
       }
     }
   }
