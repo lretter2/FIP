@@ -27,7 +27,7 @@ STAGE_CONFIG = {
 
 DATASET_NAME           = os.environ.get("POWERBI_DATASET_NAME", "FIP_Main")
 XMLA_BASE              = os.environ.get("POWERBI_XMLA_BASE", "powerbi://api.powerbi.com/v1.0/myorg")
-MIN_EXPECTED_MEASURES  = 41
+MIN_EXPECTED_MEASURES  = 41  # Must be updated manually when measures are added/removed (see Dax_measures/FIP_DAX_Measures.dax summary block)
 
 
 def get_xmla_token() -> str:

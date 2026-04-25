@@ -58,7 +58,8 @@
             "type": "Expression"
           },
           "authentication": {
-            "type": "Anonymous"
+            "type": "Anonymous",
+            "_comment": "Authentication is handled by the x-functions-key header above. ADF 'Anonymous' type means no additional bearer token is added, which is correct when using Azure Function host/function keys."
           }
         }
       },

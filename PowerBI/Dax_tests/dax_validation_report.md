@@ -140,6 +140,11 @@ The RLS test validates that the CostCentreManager DAX filter correctly restricts
 
 ```dax
 -- CostCentreManager role filter (from rls_roles.json):
+-- Applied at silver_dim_cost_centre level. Entity-level scope visible to
+-- the user is a consequence of the relationship propagation:
+--   silver_dim_cost_centre <-> silver_fact_gl_transaction (cost_centre_key)
+--     <-> gold_fact_gl_transaction
+-- Entity-level aggregates (agg_pl_monthly) are not accessible to this role.
 silver_dim_cost_centre[manager_name] = USERPRINCIPALNAME()
 ```
 
