@@ -42,6 +42,9 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Build with mdBook
         run: mdbook build
+      - name: Copy GitHub Pages challenge files
+        run: |
+          find . -maxdepth 1 -name "_github-pages-challenge-*" -exec cp {} ./book/ \;
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
