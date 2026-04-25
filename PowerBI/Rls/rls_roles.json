@@ -1,7 +1,7 @@
 {
   "_comment": "FIP Power BI RLS Role → AAD Group Mapping. Maintained by IT Administrator. Changes here must be synchronised to the Power BI dataset via sync_rls_aad.py.",
   "_version": "1.1",
-  "_last_updated": "2026-04-20",
+  "_last_updated": "2026-04-25",
   "roles": [
     {
       "role_name": "CEO",
