@@ -29,6 +29,12 @@
       },
       {
         "type": "slicerSync",
+        "field": "silver_dim_date[fiscal_period]",
+        "displayName": "Period",
+        "syncAcrossPages": true
+      },
+      {
+        "type": "slicerSync",
         "field": "silver_dim_entity[entity_name]",
         "displayName": "Legal Entity",
         "syncAcrossPages": true
