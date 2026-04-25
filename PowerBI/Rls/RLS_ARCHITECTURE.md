@@ -45,8 +45,8 @@ Layer 2 — Power BI Dataset RLS
 | Role | DAX Filter | Propagation |
 |---|---|---|
 | `CEO` | `silver_dim_entity[consolidation_group] IN VALUES(config_ref_entity_master[consolidation_group])` | Group-level access |
-| `CFO` | *(no filter — sees all entities in dataset scope)* | Full entity access |
-| `Controller` | *(no filter — sees all entities in dataset scope)* | Full entity and audit-access visuals |
+| `CFO` | *(no filter — sees all entities in dataset scope; intentional per spec v1.1)* | Full entity access |
+| `Controller` | *(no filter — sees all entities in dataset scope; intentional per spec v1.1)* | Full entity and audit-access visuals |
 | `CostCentreManager` | `silver_dim_cost_centre[manager_name] = USERPRINCIPALNAME()` | Cost-centre scoped |
 | `Auditor` | `silver_dim_entity[entity_code] IN {"ACME_HU", "BETA_HU"}` | Engagement-scoped read-only |
 
