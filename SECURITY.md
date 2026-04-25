@@ -16,7 +16,7 @@ If you discover a security vulnerability in FIP, please report it **privately** 
 
 **How to report:**
 
-1. Post a **private** message in the internal TEAMS channel `#fip-platform-security`, or send an email to the address pinned in that channel.
+1. Send an email to the address pinned in the internal TEAMS channel `#fip-platform-security`, or send a **direct message** to that channel's owners/moderators. Do **not** post vulnerability details in the channel itself.
 2. Include a description of the vulnerability, steps to reproduce, and potential impact.
 3. You will receive an acknowledgement within **48 hours**.
 4. A full assessment and remediation plan will be communicated within **14 days**.
