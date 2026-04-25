@@ -62,6 +62,7 @@ structlog==24.1.0                     # Structured JSON logging for Azure Monito
 tenacity>=8.3.0                       # Retry logic for API calls
 schedule==1.2.0                       # In-process job scheduling (dev only)
 
+jsonschema>=4.20.0                      # JSON schema validation for fact pack structure
 # ── Testing ───────────────────────────────────────────────────────────────────
 pytest>=8.2.0
 pytest-asyncio>=0.23.0
