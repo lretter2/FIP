@@ -1,6 +1,6 @@
 # Security Policy
 
-## Supported Versions
+## Supported Environments
 
 The Financial Intelligence Platform (FIP) is a continuously deployed cloud-native platform, not a versioned software release. Security patches are applied to the production environment on an ongoing basis.
 
