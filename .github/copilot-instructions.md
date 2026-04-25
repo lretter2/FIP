@@ -44,7 +44,9 @@ dbt, Bicep, and Power BI.
 - Follow PEP 8; the CI linter is `flake8` with `--max-line-length=127`.
 - Use type annotations for all function signatures and public class attributes.
 - Functions should be focused and under 50 lines; split larger functions into helpers.
-- Use `structlog` for structured JSON logging; never use `print()` in production code.
+- Use `structlog` for structured JSON logging; avoid `print()` in production code except
+  for explicit CLI/pipeline return-value output to stdout (for example, machine-readable
+  JSON emitted for orchestration/ADF consumption).
 - Use `tenacity` for retry logic around Azure SDK and OpenAI API calls.
 - Handle Azure SDK exceptions explicitly (`azure.core.exceptions.*`); do not swallow
   broad `Exception` unless re-raised or logged with full context.
