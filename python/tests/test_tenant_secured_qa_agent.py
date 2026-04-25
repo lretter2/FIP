@@ -66,8 +66,7 @@ class TestBuildTenantAwareQuery:
     """Tests for build_tenant_aware_query in tenant_secured_qa_agent."""
 
     def setup_method(self):
-        # Import after stubbing modules; also patch the module-level tenant_router
-        # used inside build_tenant_aware_query
+        # Import after stubbing heavy modules used by tenant_secured_qa_agent.
         import tenant_secured_qa_agent as qa
         self.qa = qa
 
