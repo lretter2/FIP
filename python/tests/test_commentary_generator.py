@@ -58,9 +58,7 @@ class TestParsePeriodLabel:
         assert _parse_period_label(202406) == "June 2024"
 
     def test_month_and_year_components(self):
-        label = _parse_period_label(202309)
-        assert "September" in label
-        assert "2023" in label
+        assert _parse_period_label(202309) == "September 2023"
 
     @pytest.mark.parametrize("period_key,expected_month", [
         (202601, "January"),
