@@ -50,13 +50,14 @@
         "FIP-Role-ExternalAuditor"
       ],
       "members_by_email": [],
-      "_note": "Update entity_code list for each audit engagement. Remove auditor group membership immediately after audit completion."
+      "audit_expiry_date": null,
+      "_note": "Update entity_code list and audit_expiry_date (YYYY-MM-DD) for each audit engagement. Remove auditor group membership immediately after audit completion. sync_rls_aad.py will block new member additions when audit_expiry_date has passed."
     }
   ],
   "sync_config": {
-    "sync_script": "PowerBI/rls/sync_rls_aad.py",
+    "sync_script": "PowerBI/Rls/sync_rls_aad.py",
     "schedule": "Daily 05:00 CET (before first dashboard refresh)",
-    "on_change_trigger": "ADF pipeline trigger: pl_aad_group_sync",
+    "on_change_trigger": "ADF pipeline trigger: pl_rls_sync",
     "dataset_id_env_var": "POWERBI_PROD_DATASET_ID",
     "workspace_id_env_var": "POWERBI_PROD_WORKSPACE_ID"
   },

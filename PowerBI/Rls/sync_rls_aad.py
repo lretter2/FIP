@@ -39,7 +39,7 @@ import json
 import logging
 import argparse
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -177,7 +177,31 @@ def log_sync_result(role: str, added: list, removed: list, dry_run: bool):
         f.write(json.dumps(entry) + "\n")
 
 
-# ── Main sync logic ───────────────────────────────────────────────────────────
+# ── Audit expiry check ────────────────────────────────────────────────────────
+def check_audit_expiry(role_def: dict) -> bool:
+    """Returns True if the role is within its active period (or has no expiry set).
+    Returns False if audit_expiry_date is set and has passed, logging a critical warning.
+    """
+    expiry_str = role_def.get("audit_expiry_date")
+    if not expiry_str:
+        return True
+    try:
+        expiry = date.fromisoformat(expiry_str)
+    except ValueError:
+        log.error(f"  Invalid audit_expiry_date '{expiry_str}' for role '{role_def['role_name']}' — treating as expired.")
+        return False
+    if date.today() > expiry:
+        log.critical(
+            f"  ⛔ Role '{role_def['role_name']}' AUDIT PERIOD EXPIRED (expiry: {expiry_str}). "
+            "New member additions are BLOCKED. Remove members from the AAD group and update "
+            "audit_expiry_date in rls_roles.json to re-enable access."
+        )
+        return False
+    log.info(f"  Audit expiry check: role '{role_def['role_name']}' active until {expiry_str}")
+    return True
+
+
+
 def sync_roles(role_filter: str | None = None, dry_run: bool = False):
     workspace_id = os.environ["POWERBI_PROD_WORKSPACE_ID"]
     dataset_id   = os.environ["POWERBI_PROD_DATASET_ID"]
@@ -204,15 +228,20 @@ def sync_roles(role_filter: str | None = None, dry_run: bool = False):
 
         log.info(f"\n📋 Syncing role: {role_name}")
 
+        # For time-bounded roles (e.g. Auditor), enforce the expiry date.
+        # If expired, skip adding new members and surface a critical warning.
+        role_active = check_audit_expiry(role_def)
+
         # Collect target members from AAD groups
         target_upns: set[str] = set()
-        for group_name in role_def.get("aad_groups", []):
-            members = resolve_group_members(group_name, graph_token)
-            target_upns.update(members)
+        if role_active:
+            for group_name in role_def.get("aad_groups", []):
+                members = resolve_group_members(group_name, graph_token)
+                target_upns.update(members)
 
-        # Add any directly specified email addresses
-        for email in role_def.get("members_by_email", []):
-            target_upns.add(email.lower())
+            # Add any directly specified email addresses
+            for email in role_def.get("members_by_email", []):
+                target_upns.add(email.lower())
 
         # Compare with current PBI membership
         current_upns = set(get_current_rls_members(workspace_id, dataset_id, role_name, pbi_token))

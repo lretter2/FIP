@@ -140,15 +140,26 @@ TESTS = [
     {
         "suite": "pl_measures",
         "name": "net_profit_accounting_identity",
-        "description": "Net Profit = Revenue + OOI - COGS - OpEx + FinInc - FinExp - Tax. HU GAAP accrual identity.",
+        "description": "Net Profit = Revenue + OOI - COGS - Personnel - OtherOpEx + FinInc - FinExp - Tax. HU GAAP accrual identity.",
         "dax": """
             EVALUATE
             ROW(
                 "test_result",
+                VAR fin_income  = CALCULATE(
+                                      SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]),
+                                      gold_fact_gl_transaction[pl_line_item] = "Financial Income"
+                                  )
+                VAR fin_expense = CALCULATE(
+                                      SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]),
+                                      gold_fact_gl_transaction[pl_line_item] = "Financial Expense"
+                                  )
+                VAR tax_expense = CALCULATE(
+                                      SUMX(gold_fact_gl_transaction, gold_fact_gl_transaction[net_amount_lcy]),
+                                      gold_fact_gl_transaction[pl_line_item] = "Tax Expense"
+                                  )
                 VAR identity = [Revenue] + [Other Operating Income]
-                               - [COGS] - [Total OpEx]
-                               + [Financial Income] - [Financial Expense]
-                               - [Tax Expense]
+                               - [COGS] - [Personnel Expense] - [Other OpEx]
+                               + fin_income - fin_expense - tax_expense
                 VAR measure  = [Net Profit]
                 RETURN IF(ABS(identity - measure) < 1, 1, 0)
             )

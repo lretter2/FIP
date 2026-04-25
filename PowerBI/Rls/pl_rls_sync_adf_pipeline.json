@@ -37,8 +37,8 @@
           "timeout": "0.00:10:00",
           "retry": 2,
           "retryIntervalInSeconds": 30,
-          "secureInput": false,
-          "secureOutput": false
+          "secureInput": true,
+          "secureOutput": true
         },
         "typeProperties": {
           "method": "POST",
@@ -58,8 +58,8 @@
             "type": "Expression"
           },
           "authentication": {
-            "type": "MSI",
-            "resource": "https://management.azure.com/"
+            "type": "Anonymous",
+            "_comment": "Authentication is handled by the x-functions-key header above. ADF 'Anonymous' type means no additional bearer token is added, which is correct when using Azure Function host/function keys."
           }
         }
       },

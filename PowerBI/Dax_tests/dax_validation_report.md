@@ -140,12 +140,12 @@ The RLS test validates that the CostCentreManager DAX filter correctly restricts
 
 ```dax
 -- CostCentreManager role filter (from rls_roles.json):
-silver_dim_entity[entity_code] =
-    LOOKUPVALUE(
-        config_ref_entity_master[entity_code],
-        config_ref_entity_master[data_owner],
-        USERPRINCIPALNAME()
-    )
+-- Applied at silver_dim_cost_centre level. Entity-level scope visible to
+-- the user is a consequence of the relationship propagation:
+--   silver_dim_cost_centre <-> silver_fact_gl_transaction (cost_centre_key)
+--     <-> gold_fact_gl_transaction
+-- Entity-level aggregates (agg_pl_monthly) are not accessible to this role.
+silver_dim_cost_centre[manager_name] = USERPRINCIPALNAME()
 ```
 
 | Test User | Role | Expected Visible Entities | Test Result |
@@ -168,7 +168,7 @@ silver_dim_entity[entity_code] =
 | BLANK propagation on missing budget | âś… | DIVIDE returns BLANK(), not 0 or error |
 | YTD cumulative sum verified | âś… | DATESYTD Janâ€“Mar 2025 confirmed |
 | YoY prior-year period correct | âś… | 202502 â†’ 202402 (SAMEPERIODLASTYEAR) |
-| 40 DAX measures deployed (TMSL) | âś… | 7 display folders, format strings set |
+| 40 DAX measures deployed (TMSL) | âś… | 7 display folders, format strings set (41 after Debt to Equity addition) |
 | JUnit XML output for Azure DevOps | âś… | `junit_dax_results.xml` produced |
 
 ---
@@ -176,7 +176,7 @@ silver_dim_entity[entity_code] =
 ## Next Steps
 
 1. **Connect to live XMLA endpoint** â€” re-run `run_dax_tests.py --workspace FIP-Development --dataset FIP_Main` against the DEV workspace to validate against real data (not fixtures).
-2. **Deploy TMSL** â€” execute `deploy_xmla.py --stage dev --tmsl PowerBI/dax_measures/FIP_DAX_Measures_TMSL.json` to push all 40 measures.
+2. **Deploy TMSL** â€” execute `deploy_xmla.py --stage dev --tmsl PowerBI/Dax_measures/FIP_DAX_Measures_TMSL.json` to push all 41 measures.
 3. **Promote to TEST** â€” after DEV passes, run CI/CD pipeline stage DeployTest which reruns the full test suite via `--output junit_results.xml`.
 4. **PROD gate** â€” obtain CFO sign-off on the validation report before triggering DeployProd via the deployment pipeline.
 5. **Schedule RLS sync** â€” activate `pl_rls_sync` ADF pipeline trigger (daily 05:00 CET) and add the Execute Pipeline activity to `pl_monthly_close`.

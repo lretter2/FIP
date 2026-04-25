@@ -63,7 +63,7 @@
       },
       {
         "aad_email": "test-read@fip-test.onmicrosoft.com",
-        "role": "ReadOnly",
+        "role": "Auditor",
         "entities": [
           "ACME_HU"
         ]

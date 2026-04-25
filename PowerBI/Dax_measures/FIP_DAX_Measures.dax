@@ -1,7 +1,7 @@
 // =============================================================================
 // FIP_DAX_Measures.dax
 // Financial Intelligence Platform — Complete DAX Measure Library
-// HU GAAP · 35 Measures · 7 Display Folders
+// HU GAAP · 41 Measures · 7 Display Folders
 // Version 1.0 · Generated 2026-04-10
 //
 // IMPORT INSTRUCTIONS (Tabular Editor 2 / TE3):
@@ -269,6 +269,19 @@ CALCULATE(
 // Display Folder: BS_ — Balance Sheet
 // Format String: #,0,, " M HUF"
 // Description: Shareholders' equity per HU GAAP (2000/C Act §35-§39).
+
+
+// BS-08 ── Debt to Equity
+// Tőkeáttételi mutató = Total Liabilities / Total Equity
+[Debt to Equity] :=
+DIVIDE(
+    [Total Liabilities],
+    [Total Equity],
+    BLANK()
+)
+// Display Folder: BS_ — Balance Sheet
+// Format String: 0.00
+// Description: Debt-to-equity ratio. Total Liabilities ÷ Total Equity. BLANK when equity is zero.
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -608,12 +621,12 @@ CALCULATE(
 // MEASURE COUNT SUMMARY
 // =============================================================================
 // PL_ — Profitability       : 10 measures  (PL-01 to PL-10)
-// BS_ — Balance Sheet       :  7 measures  (BS-01 to BS-07)
+// BS_ — Balance Sheet       :  8 measures  (BS-01 to BS-08)
 // CF_ — Cash Flow           :  5 measures  (CF-01 to CF-05)
 // WC_ — Working Capital     :  4 measures  (WC-01 to WC-04)
 // VAR_ — Variance vs Budget :  4 measures  (VAR-01 to VAR-04)
 // RAG_ — Status Indicators  :  5 measures  (RAG-01 to RAG-05)
 // TI_ — Time Intelligence   :  5 measures  (TI-01 to TI-05)
 //                           ────────────────
-//                    TOTAL  : 40 measures
+//                    TOTAL  : 41 measures
 // =============================================================================
