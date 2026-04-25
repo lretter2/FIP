@@ -308,7 +308,7 @@ Cross-filter: selecting a period in the revenue trend chart filters the entity P
 - [ ] Set page background `#F5F6FA`, header textbox background `#1B3A6B`.
 - [ ] Validate visual positions at 1920×1080 canvas.
 - [ ] Enable Smart Narrative visual and bind the five dynamic values listed above.
-- [ ] Configure slicer sync (Fiscal Year and Entity slicers set to sync across all pages).
+- [ ] Configure slicer sync (Fiscal Year, Period, and Entity slicers set to sync across all pages).
 - [ ] Add YTD View and Full Year View bookmarks.
 - [ ] Verify CFO RLS role sees all entities (no DAX filter).
 - [ ] Publish to `FIP-Production` workspace; confirm 4-hour auto-refresh schedule.
