@@ -337,7 +337,14 @@ def process_commentaries(
     languages: List[str],
 ) -> List[Dict[str, Any]]:
     results = []
-    fact_pack = build_variance_fact_pack(conn, entity_code, period_key)
+    try:
+        fact_pack = build_variance_fact_pack(conn, entity_code, period_key)
+    except Exception as e:
+        logger.error("Fact pack build failed for entity=%s period=%s: %s", entity_code, period_key, e)
+        for role in roles:
+            for lang in languages:
+                results.append({"role": role, "language": lang, "status": "FAILED", "error": str(e)})
+        return results
 
     for role in roles:
         for lang in languages:
