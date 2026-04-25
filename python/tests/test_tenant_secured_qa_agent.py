@@ -27,8 +27,6 @@ _db_utils_stub.get_db_connection = MagicMock()  # type: ignore[attr-defined]
 _db_utils_stub.get_openai_client = MagicMock()  # type: ignore[attr-defined]
 sys.modules.setdefault("db_utils", _db_utils_stub)
 
-import pytest
-
 from tenant_config import TenantDatabase, TenantIsolationModel
 from tenant_router import TenantContext
 
