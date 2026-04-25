@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import pyodbc
+from jsonschema import validate, ValidationError
 from openai import AzureOpenAI
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
@@ -39,6 +40,7 @@ AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
 MATERIALITY_THRESHOLD = float(os.getenv("MATERIALITY_THRESHOLD_PCT", "5.0"))
 MAX_COMMENTARY_WORDS = int(os.getenv("MAX_COMMENTARY_WORDS", "600"))
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "../../prompts")
+VALIDATION_SCHEMA_FILE = os.path.join(PROMPT_DIR, "input_validation.txt")
 
 _MONTH_NAMES = [
     "January", "February", "March", "April", "May", "June",
@@ -186,6 +188,9 @@ def build_variance_fact_pack(conn: pyodbc.Connection, entity_code: str, period_k
     period_label = _parse_period_label(period_key)
     fact_pack = _build_fact_sections(row, period_label, period_key, entity_code)
     fact_pack["alerts"] = _build_alerts(row)
+
+    validate_fact_pack(fact_pack)
+
     return fact_pack
 
 
@@ -197,10 +202,28 @@ def load_system_prompt(role: str) -> str:
         return f.read()
 
 
+def load_validation_schema() -> dict:
+    with open(VALIDATION_SCHEMA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_hungarian_translation_prompt() -> str:
+    prompt_file = os.path.join(PROMPT_DIR, "system_prompt_hu_translation.txt")
+    with open(prompt_file, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def validate_fact_pack(fact_pack: dict) -> None:
+    try:
+        schema = load_validation_schema()
+        validate(instance=fact_pack, schema=schema)
+        logger.info("Fact pack validation passed")
+    except ValidationError as e:
+        logger.warning("Fact pack validation warning: %s", e.message)
+
+
 def generate_commentary(client: AzureOpenAI, fact_pack: dict, role: str, language: str = "en") -> str:
     system_prompt = load_system_prompt(role)
-    if language == "hu":
-        system_prompt += "\n\nGenerate the commentary in Hungarian (formal business style)."
 
     user_message = (
         "Please generate the management commentary for the following period.\n\n"
@@ -218,6 +241,29 @@ def generate_commentary(client: AzureOpenAI, fact_pack: dict, role: str, languag
         max_tokens=1200,
         top_p=0.95,
     )
+
+    english_commentary = response.choices[0].message.content
+
+    if language == "hu":
+        return translate_commentary_to_hungarian(client, english_commentary)
+
+    return english_commentary
+
+
+def translate_commentary_to_hungarian(client: AzureOpenAI, english_commentary: str) -> str:
+    translation_prompt = load_hungarian_translation_prompt()
+
+    response = client.chat.completions.create(
+        model=AZURE_OPENAI_DEPLOYMENT,
+        messages=[
+            {"role": "system", "content": translation_prompt},
+            {"role": "user", "content": english_commentary},
+        ],
+        temperature=0.2,
+        max_tokens=1500,
+        top_p=0.95,
+    )
+
     return response.choices[0].message.content
 
 
