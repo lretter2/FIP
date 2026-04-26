@@ -120,12 +120,17 @@ def validate_sql(sql: str) -> tuple[bool, str]:
     if not stripped.startswith("SELECT") and not stripped.startswith("WITH"):
         return False, "Generated SQL must start with SELECT or WITH (CTE)"
 
-    allowed_schemas = {"GOLD", "SILVER", "CONFIG"}
-    schema_refs = re.findall(r"\bFROM\s+(\w+)\.", sql_upper)
-    schema_refs += re.findall(r"\bJOIN\s+(\w+)\.", sql_upper)
-    for schema in schema_refs:
-        if schema not in allowed_schemas:
-            return False, f"Query references unauthorised schema: {schema}"
+    allowed_schemas = {"GOLD", "SILVER"}
+    allowed_config_tables = {"TENANT_COMPANY_MAP"}
+    object_refs = re.findall(r"\b(?:FROM|JOIN)\s+(\w+)\.(\w+)\b", sql_upper)
+    for schema, table in object_refs:
+        if schema in allowed_schemas:
+            continue
+        if schema == "CONFIG" and table in allowed_config_tables:
+            continue
+        if schema == "CONFIG":
+            return False, f"Query references unauthorised config table: {schema}.{table}"
+        return False, f"Query references unauthorised schema: {schema}"
 
     return True, "OK"
 
