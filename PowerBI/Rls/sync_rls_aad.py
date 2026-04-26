@@ -40,7 +40,7 @@ import logging
 import argparse
 from pathlib import Path
 from datetime import date, datetime, timezone
-from urllib.parse import quote
+from urllib.parse import urlencode
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -109,9 +109,11 @@ def pbi_request(method: str, path: str, token: str, body: dict | None = None) ->
 def resolve_group_members(group_name: str, graph_token: str) -> list[str]:
     """Returns list of UPNs (email addresses) for all members of an AAD group."""
     # Find group by display name
-    safe_name = quote(group_name.replace("'", "''"), safe="'")
+    # OData string escaping is kept separate from URL encoding
+    odata_safe_name = group_name.replace("'", "''")
+    qs = urlencode({"$filter": f"displayName eq '{odata_safe_name}'", "$select": "id,displayName"})
     result = graph_get(
-        f"/groups?$filter=displayName eq '{safe_name}'&$select=id,displayName",
+        f"/groups?{qs}",
         graph_token
     )
     groups = result.get("value", [])
