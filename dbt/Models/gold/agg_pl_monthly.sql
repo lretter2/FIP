@@ -39,8 +39,6 @@ gl as (
         net_amount_eur,
         is_intercompany
     from {{ ref('fct_gl_transaction') }}
-    -- CRITICAL CONTROL: Do NOT filter out is_intercompany here
-    -- Entity-level view includes all transactions; group consolidation filters separately (see final CTE)
 
 ),
 
@@ -84,11 +82,10 @@ actuals_agg as (
 
     UNION ALL
 
-    -- GROUP-level consolidation: exclude intercompany transactions for consolidated P&L
     select
         period_key,
         entity_key,
-        'group' as consolidation_scope,  -- Group consolidation EXCLUDES IC transactions
+        'group' as consolidation_scope, 
         sum(case when l1_category = 'Revenue' and is_intercompany = false    then signed_amount_lcy else 0 end) as revenue,
         sum(case when l1_category = 'COGS' and is_intercompany = false       then signed_amount_lcy else 0 end) as cogs,
         sum(case when l1_category = 'OPEX' and is_intercompany = false       then signed_amount_lcy else 0 end) as opex_total,
