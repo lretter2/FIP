@@ -52,9 +52,14 @@ TEST_MODE                = os.getenv("TEST_MODE", "false").lower() == "true"
 # ---------------------------------------------------------------------------
 
 # Keywords that must never appear in user input or generated SQL.
+# NOTE:
+# Prefix-only entries such as "xp_" / "sp_" are ineffective when the blocked-keyword
+# scanner uses word-boundary matching (for example, \b...\b), because names like
+# "xp_cmdshell" and "sp_executesql" do not end at a word boundary after the underscore.
+# Use explicit procedure names here so the existing scanner can match them reliably.
 SQL_BLOCKED_KEYWORDS = [
     "DROP", "DELETE", "TRUNCATE", "INSERT", "UPDATE", "ALTER", "CREATE",
-    "EXEC", "EXECUTE", "xp_", "sp_", "GRANT", "REVOKE", "OPENROWSET",
+    "EXEC", "EXECUTE", "xp_cmdshell", "sp_executesql", "GRANT", "REVOKE", "OPENROWSET",
 ]
 
 # Compiled pattern: matches strings that open with a SQL statement keyword.
