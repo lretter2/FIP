@@ -38,7 +38,7 @@ jobs:
       run: |
         # Scan for hardcoded secrets and high-severity issues; exclude tests
         bandit -r python/ -x python/tests/ --severity-level medium --confidence-level medium \
-          --format txt --exit-zero
+          --format txt
     - name: Test with pytest
       run: |
         pytest python/tests/
