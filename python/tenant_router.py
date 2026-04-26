@@ -383,24 +383,24 @@ class TenantRouter:
           (modified_query, parameter_values) for parameterized execution
         """
 
-        # Inject RLS WHERE clause using a subquery against the canonical tenant→entity
-        # mapping table.  This avoids relying on outer-query aliases (e / c) and always
-        # produces exactly ONE bind parameter.
-        #
-        # Primary isolation is guaranteed by the schema-per-tenant prefix that
-        # build_tenant_aware_query applies; this clause is defence-in-depth.
+        # Apply RLS in an outer query so we do not rely on fragile string parsing
+        # of the inner SQL. This preserves the semantics of any existing WHERE /
+        # OR logic in the original query and avoids invalid SQL when WHERE appears
+        # only inside nested subqueries or CTEs.
+        sanitized_query = base_query.rstrip().rstrip(";")
+        outer_alias = "tenant_scoped_query"
         rls_condition = (
-            "entity_key IN (\n"
+            f"{outer_alias}.entity_key IN (\n"
             "    SELECT entity_key FROM config.tenant_company_map\n"
             "    WHERE tenant_id = ?\n"
             ")"
         )
 
-        if "WHERE" not in base_query.upper():
-            modified_query = base_query.rstrip(";") + f"\nWHERE {rls_condition};"
-        else:
-            # Append to existing WHERE clause
-            modified_query = base_query.rstrip(";") + f"\nAND {rls_condition};"
+        modified_query = (
+            "SELECT *\n"
+            f"FROM (\n{sanitized_query}\n) AS {outer_alias}\n"
+            f"WHERE {rls_condition};"
+        )
 
         return modified_query, [context.tenant_id]
 
