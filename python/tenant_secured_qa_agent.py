@@ -160,11 +160,11 @@ def _generate_sql_from_nl(context: TenantContext, user_query: str) -> str:
         sql = response.choices[0].message.content.strip()
         logger.debug(f"[{context.request_id}] Raw generated SQL: {sql}")
         return sql
-    except Exception as exc:
-        logger.error(f"[{context.request_id}] SQL generation failed: {exc}")
+    except Exception:
+        logger.exception(f"[{context.request_id}] SQL generation failed")
         raise HTTPException(
             status_code=503,
-            detail=f"SQL generation failed: {exc}",
+            detail=f"SQL generation service is temporarily unavailable. Request ID: {context.request_id}",
         )
 
 
