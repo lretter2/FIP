@@ -266,8 +266,9 @@ class TestValidateSql:
         assert ok is False
         assert "bronze" in reason.lower()
 
-    def test_config_schema_allowed(self):
-        # config schema (used for RLS maps) must be allowed
+    def test_config_tenant_company_map_allowed_for_rls(self):
+        # Only the specific RLS mapping table should be allowed here; this test
+        # must not document arbitrary config.* access as acceptable.
         sql = "SELECT * FROM gold.t JOIN config.tenant_company_map m ON t.entity_key = m.entity_key WHERE m.tenant_id = ?"
         ok, _ = self.validate(sql)
         assert ok is True
