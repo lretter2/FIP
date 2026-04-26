@@ -68,7 +68,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             # Extract authentication header
             auth_header = request.headers.get("Authorization")
 
-            # Get query/body parameters for entity_id (optional)
+            # Get entity_id from query parameters (optional)
             entity_id = request.query_params.get("entity_id")
 
             # Route request to tenant
