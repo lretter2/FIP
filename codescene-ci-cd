@@ -1,0 +1,9 @@
+version: 2.1
+orbs:
+  codescene-ci-cd: empear/codescene-ci-cd@1.1.1
+workflows:
+  version: 2
+  my-workflow:
+    jobs:
+      - codescene-ci-cd/run-delta-analysis:
+          context: codescene-ci-cd
