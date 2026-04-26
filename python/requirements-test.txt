@@ -24,6 +24,7 @@ pyjwt>=2.8.0
 # ── Utilities ──────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0
 jsonschema>=4.20.0
+sqlglot>=30.6.0                          # SQL parser for RLS injection tests
 
 # ── Web Frameworks ─────────────────────────────────────────────────────────
 fastapi>=0.104.0
