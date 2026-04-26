@@ -238,7 +238,7 @@ class TestValidateSql:
         self.validate = qa.validate_sql
 
     def test_valid_select_passes(self):
-        sql = "SELECT period_key, entity_name FROM gold.kpi_profitability JOIN silver.dim_entity e ON kpi.entity_key = e.entity_key"
+        sql = "SELECT period_key, entity_name FROM gold.kpi_profitability kpi JOIN silver.dim_entity e ON kpi.entity_key = e.entity_key"
         ok, reason = self.validate(sql)
         assert ok is True
         assert reason == "OK"
