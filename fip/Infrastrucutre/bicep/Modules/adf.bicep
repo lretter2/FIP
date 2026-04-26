@@ -54,7 +54,6 @@ resource dataFactory 'Microsoft.DataFactory/factories@2018-06-01' = {
 // Note: Full linked service JSON is deployed via ADF CI/CD pipeline,
 // not via Bicep (ADF has its own ARM/JSON deployment mechanism).
 // Source of truth: adf_pipelines/linked_services/*.json
-// FIX (2026-04-09): Corrected all LS names to match actual deployed JSON files.
 //
 // Storage & Compute:
 //   ls_adls_gen2           — ADLS Gen2, unified storage (bronze/silver/gold), MI auth
