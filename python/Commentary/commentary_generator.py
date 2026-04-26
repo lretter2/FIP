@@ -230,8 +230,12 @@ def load_hungarian_translation_prompt() -> str:
     try:
         with open(prompt_file, "r", encoding="utf-8") as f:
             return f.read()
-    except (FileNotFoundError, OSError):
-        logger.warning("Hungarian translation prompt file not found; using built-in default translation prompt.")
+    except (FileNotFoundError, OSError) as e:
+        logger.warning(
+            "Hungarian translation prompt file unavailable at '%s'; using built-in default translation prompt. Error: %s",
+            prompt_file,
+            str(e),
+        )
         return (
             "Translate the following management commentary to Hungarian. "
             "Preserve numbers and financial meaning."
