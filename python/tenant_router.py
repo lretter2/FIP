@@ -37,6 +37,11 @@ if not JWT_SECRET:
         "JWT_SECRET is not set; JWT authentication will be unavailable. "
         "Set the JWT_SECRET environment variable to enable JWT-based auth."
     )
+elif len(JWT_SECRET.encode()) < 32:
+    logger.warning(
+        "JWT_SECRET is shorter than the recommended 32 bytes; "
+        "use a cryptographically random secret of at least 32 bytes in production."
+    )
 
 
 @dataclass

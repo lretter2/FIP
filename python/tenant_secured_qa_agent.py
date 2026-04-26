@@ -254,9 +254,10 @@ def validate_sql(sql: str) -> tuple[bool, str]:
     allowed_schemas = {"GOLD", "SILVER", "CONFIG"}
     matches = re.findall(r'\bFROM\s+(\w+)\.', sql_upper)
     matches += re.findall(r'\bJOIN\s+(\w+)\.', sql_upper)
+    matches += re.findall(r'\bRIGHT\s+JOIN\s+(\w+)\.', sql_upper)
     for schema in matches:
         if schema not in allowed_schemas:
-            return False, f"Query references unauthorised schema: {schema}"
+            return False, f"Query references unauthorized schema: {schema}"
     return True, "OK"
 
 
