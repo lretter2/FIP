@@ -209,8 +209,14 @@ def load_system_prompt(role: str) -> str:
     prompt_file = os.path.join(PROMPT_DIR, f"system_prompt_{role.lower()}_commentary.txt")
     if not os.path.exists(prompt_file):
         prompt_file = os.path.join(PROMPT_DIR, "system_prompt_cfo_commentary.txt")
-    with open(prompt_file, "r", encoding="utf-8") as f:
-        return f.read()
+    try:
+        with open(prompt_file, "r", encoding="utf-8") as f:
+            return f.read()
+    except (FileNotFoundError, OSError):
+        return (
+            "You are a helpful financial analyst. Write a concise management commentary "
+            "based strictly on the provided variance fact pack."
+        )
 
 
 def load_validation_schema() -> dict:
@@ -220,8 +226,14 @@ def load_validation_schema() -> dict:
 
 def load_hungarian_translation_prompt() -> str:
     prompt_file = os.path.join(PROMPT_DIR, "system_prompt_hu_translation.txt")
-    with open(prompt_file, "r", encoding="utf-8") as f:
-        return f.read()
+    try:
+        with open(prompt_file, "r", encoding="utf-8") as f:
+            return f.read()
+    except (FileNotFoundError, OSError):
+        return (
+            "Translate the following management commentary to Hungarian. "
+            "Preserve numbers and financial meaning."
+        )
 
 
 def validate_fact_pack(fact_pack: dict) -> None:
