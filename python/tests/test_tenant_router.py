@@ -103,6 +103,12 @@ class TestExtractTenantFromJwt:
         with pytest.raises(TenantAuthenticationError):
             router.extract_tenant_from_jwt("")
 
+    def test_missing_jwt_secret_raises(self, router, monkeypatch):
+        monkeypatch.setattr(tr, "JWT_SECRET", None)
+        token = _make_jwt({"tenant_id": "tenant_1"})
+        with pytest.raises(TenantAuthenticationError, match="JWT_SECRET"):
+            router.extract_tenant_from_jwt(token)
+
 
 # ── extract_tenant_from_api_key ───────────────────────────────────────────────
 
@@ -278,6 +284,29 @@ class TestApplyRlsFilter:
         assert len(result) == 2
         assert isinstance(result[0], str)
         assert isinstance(result[1], list)
+
+    def test_no_where_returns_exactly_one_param(self, router):
+        """Parameter count must match the single ? placeholder — no mismatch."""
+        ctx = self._ctx()
+        _, params = router.apply_rls_filter(ctx, "SELECT * FROM gold.t")
+        assert len(params) == 1
+
+    def test_existing_where_returns_exactly_one_param(self, router):
+        """Same guarantee when an existing WHERE clause is extended with AND."""
+        ctx = self._ctx()
+        _, params = router.apply_rls_filter(ctx, "SELECT * FROM gold.t WHERE x = 1")
+        assert len(params) == 1
+
+    def test_rls_uses_subquery_not_alias(self, router):
+        """RLS condition must not hard-code outer-query aliases like e. or c."""
+        ctx = self._ctx()
+        modified, _ = router.apply_rls_filter(ctx, "SELECT * FROM gold.t")
+        # The condition must not reference bare aliases from the outer query
+        assert "e.tenant_id" not in modified
+        assert "c.entity_id" not in modified
+        # Positive check: subquery against the canonical mapping table must be present
+        assert "config.tenant_company_map" in modified
+        assert "entity_key" in modified
 
 
 # ── get_schema_prefix ─────────────────────────────────────────────────────────

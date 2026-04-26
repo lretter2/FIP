@@ -24,8 +24,8 @@ from tenant_config import TenantRegistry, TenantDatabase, get_registry
 
 logger = logging.getLogger(__name__)
 
-# JWT configuration (from environment)
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-prod")
+# JWT configuration (from environment — no insecure fallback)
+JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_TENANT_CLAIM = os.getenv("JWT_TENANT_CLAIM", "tenant_id")
 
@@ -186,6 +186,11 @@ class TenantRouter:
           TenantAuthenticationError: If token is invalid or missing tenant_id
         """
         try:
+            if not JWT_SECRET:
+                raise TenantAuthenticationError(
+                    "JWT_SECRET environment variable is not configured. "
+                    "Set it in your environment or Azure Key Vault before starting the application."
+                )
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
 
             if JWT_TENANT_CLAIM not in payload:
