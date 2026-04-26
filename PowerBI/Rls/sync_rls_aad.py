@@ -40,6 +40,7 @@ import logging
 import argparse
 from pathlib import Path
 from datetime import date, datetime, timezone
+from urllib.parse import quote
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -108,8 +109,9 @@ def pbi_request(method: str, path: str, token: str, body: dict | None = None) ->
 def resolve_group_members(group_name: str, graph_token: str) -> list[str]:
     """Returns list of UPNs (email addresses) for all members of an AAD group."""
     # Find group by display name
+    safe_name = quote(group_name.replace("'", "''"), safe="'")
     result = graph_get(
-        f"/groups?$filter=displayName eq '{group_name}'&$select=id,displayName",
+        f"/groups?$filter=displayName eq '{safe_name}'&$select=id,displayName",
         graph_token
     )
     groups = result.get("value", [])
@@ -169,8 +171,6 @@ def log_sync_result(role: str, added: list, removed: list, dry_run: bool):
         "dry_run": dry_run,
         "added_count": len(added),
         "removed_count": len(removed),
-        "added": added,
-        "removed": removed,
     }
     log_path = Path(__file__).parent / "rls_sync_audit.jsonl"
     with open(log_path, "a") as f:

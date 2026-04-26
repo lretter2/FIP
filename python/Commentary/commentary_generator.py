@@ -297,7 +297,7 @@ def write_commentary_to_queue(
              approval_status, generated_at, generated_by_model)
         VALUES (
             (SELECT entity_id FROM config.ref_entity_master WHERE entity_code = ?),
-            ?, ?, ?, ?, ?::jsonb, ?, 'PENDING_REVIEW', GETUTCDATE(), ?
+            ?, ?, ?, ?, CAST(? AS NVARCHAR(MAX)), ?, 'PENDING_REVIEW', GETUTCDATE(), ?
         )
     """
     cursor = conn.cursor()

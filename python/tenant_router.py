@@ -25,7 +25,7 @@ from tenant_config import TenantRegistry, TenantDatabase, get_registry
 logger = logging.getLogger(__name__)
 
 # JWT configuration (from environment)
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-prod")
+JWT_SECRET = os.environ.get("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_TENANT_CLAIM = os.getenv("JWT_TENANT_CLAIM", "tenant_id")
 
@@ -140,12 +140,19 @@ class TenantRouter:
         registry: Optional[TenantRegistry] = None,
         strategies: Optional[List] = None,
     ) -> None:
+        if not JWT_SECRET:
+            raise ValueError("JWT_SECRET environment variable is required")
         self.registry = registry or get_registry()
-        self._strategies: List = strategies if strategies is not None else [
-            JWTExtractionStrategy(self),
-            APIKeyExtractionStrategy(self),
-            HeaderExtractionStrategy(self),
-        ]
+        if strategies is not None:
+            self._strategies: List = strategies
+        else:
+            default_strategies: List = [
+                JWTExtractionStrategy(self),
+                APIKeyExtractionStrategy(self),
+            ]
+            if os.getenv("ALLOW_HEADER_AUTH", "false").lower() == "true":
+                default_strategies.append(HeaderExtractionStrategy(self))
+            self._strategies = default_strategies
         logger.info("TenantRouter initialized")
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -383,11 +390,12 @@ class TenantRouter:
 
         if "WHERE" not in base_query.upper():
             modified_query = base_query.rstrip(";") + f"\n{rls_clause};"
+            params = [context.tenant_id, context.tenant_id]
         else:
-            # Add to existing WHERE
             modified_query = base_query.rstrip(";") + f"\nAND e.tenant_id = ?;"
+            params = [context.tenant_id]
 
-        return modified_query, [context.tenant_id, context.tenant_id]
+        return modified_query, params
 
     # ─────────────────────────────────────────────────────────────────────────
     # Middleware: Decorator for protecting endpoints

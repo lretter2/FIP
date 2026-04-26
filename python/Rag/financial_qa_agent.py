@@ -315,10 +315,10 @@ def validate_sql(sql: str) -> tuple[bool, str]:
     return True, "OK"
 
 
-def execute_sql(conn: pyodbc.Connection, sql: str) -> pd.DataFrame:
+def execute_sql(conn: pyodbc.Connection, sql: str, params: list = None) -> pd.DataFrame:
     """Execute validated SQL against Synapse and return result as DataFrame."""
     try:
-        df = pd.read_sql(sql, conn)
+        df = pd.read_sql(sql, conn, params=params or [])
         return df
     except Exception as e:
         raise RuntimeError(f"SQL execution failed: {e}") from e
@@ -381,7 +381,6 @@ class FinancialQAAgent:
     def __init__(self):
         self.openai_client  = get_openai_client()
         self.search_client  = get_search_client()
-        self.db_conn        = get_db_connection()
 
     def answer(self, query: str, user_id: str, entity_code: Optional[str] = None,
                language: str = "en") -> dict:
@@ -411,7 +410,7 @@ class FinancialQAAgent:
         )
 
         # 3. Build RLS clause
-        rls_clause = get_rls_clause(user_id, entity_code)
+        rls_clause, rls_params = get_rls_clause(user_id, entity_code)
 
         # 4. Generate SQL
         sql = generate_sql(self.openai_client, query, schema_context, rls_clause, intent)
@@ -431,8 +430,9 @@ class FinancialQAAgent:
             }
 
         # 6. Execute SQL
+        conn = get_db_connection()
         try:
-            df_result = execute_sql(self.db_conn, sql)
+            df_result = execute_sql(conn, sql, rls_params)
         except RuntimeError as e:
             logger.error(f"Query execution failed: {e}")
             return {
@@ -443,6 +443,8 @@ class FinancialQAAgent:
                 "row_count": 0,
                 "warning": str(e)
             }
+        finally:
+            conn.close()
 
         # 7. Format response
         answer = format_response(
@@ -459,7 +461,7 @@ class FinancialQAAgent:
         }
 
     def close(self):
-        self.db_conn.close()
+        pass
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ This middleware MUST be registered first in the FastAPI app to ensure
 all subsequent operations are tenant-aware.
 """
 
+import json
 import logging
 import uuid
 from typing import Callable, Optional
@@ -26,9 +27,6 @@ from tenant_router import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Request-scoped context storage
-_request_context: Optional[TenantContext] = None
 
 
 class TenantContextMiddleware(BaseHTTPMiddleware):
@@ -100,7 +98,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         except TenantAuthenticationError as e:
             logger.warning(f"[{request_id}] Authentication failed: {e}")
             return Response(
-                content=f'{{"error": "Unauthorized", "message": "{str(e)}"}}',
+                content=json.dumps({"error": "Unauthorized", "message": str(e)}),
                 status_code=401,
                 media_type="application/json",
                 headers={"X-Request-ID": request_id}
@@ -109,7 +107,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         except TenantNotFoundError as e:
             logger.warning(f"[{request_id}] Tenant not found: {e}")
             return Response(
-                content=f'{{"error": "Not Found", "message": "{str(e)}"}}',
+                content=json.dumps({"error": "Not Found", "message": str(e)}),
                 status_code=404,
                 media_type="application/json",
                 headers={"X-Request-ID": request_id}
@@ -118,7 +116,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             logger.error(f"[{request_id}] Unexpected error in middleware: {e}", exc_info=True)
             return Response(
-                content=f"{{'error': 'Internal Server Error', 'message': 'Authentication processing failed'}}",
+                content=json.dumps({"error": "Internal Server Error", "message": "Authentication processing failed"}),
                 status_code=500,
                 media_type="application/json",
                 headers={"X-Request-ID": request_id}
