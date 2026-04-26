@@ -30,7 +30,7 @@ expected_signs as (
 
     select
         transaction_id,
-        company_id,
+        entity_id,
         account_type,
         debit_lcy,
         credit_lcy,
@@ -50,7 +50,7 @@ violations as (
 
     select
         transaction_id,
-        company_id,
+        entity_id,
         account_type,
         signed_amount_lcy,
         expected_signed_amount_lcy,

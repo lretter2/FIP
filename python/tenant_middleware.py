@@ -68,14 +68,14 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             # Extract authentication header
             auth_header = request.headers.get("Authorization")
 
-            # Get query/body parameters for company_id (optional)
-            company_id = request.query_params.get("company_id")
+            # Get query/body parameters for entity_id (optional)
+            entity_id = request.query_params.get("entity_id")
 
             # Route request to tenant
             context = self.router.route_request(
                 authorization_header=auth_header,
                 headers=dict(request.headers),
-                company_id=company_id,
+                entity_id=entity_id,
                 request_id=request_id
             )
 

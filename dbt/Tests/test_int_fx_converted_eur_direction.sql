@@ -48,7 +48,7 @@ arithmetic_check as (
 
     select
         transaction_id,
-        company_id,
+        entity_id,
         currency_code,
         net_amount_lcy,
         net_amount_eur,
@@ -66,7 +66,7 @@ violations as (
 
     select
         transaction_id,
-        company_id,
+        entity_id,
         currency_code,
         net_amount_lcy,
         net_amount_eur,

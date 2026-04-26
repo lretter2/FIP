@@ -2,7 +2,7 @@
 --  dbt TEST: assert_no_duplicate_source_ids
 --  Financial Intelligence Platform · HU GAAP
 --
---  Rule (DQ-008): source_system_id must be unique per company_id and
+--  Rule (DQ-008): source_system_id must be unique per entity_id and
 --                 source_system combination.
 --                 Duplicates indicate double-loaded batches, ERP export
 --                 retries that were not deduplicated, or broken Bronze
@@ -20,7 +20,7 @@
 
 with duplicate_source_ids as (
     select
-        company_id,
+        entity_id,
         source_system,
         source_system_id,
         count(*)            as occurrence_count,
@@ -31,14 +31,14 @@ with duplicate_source_ids as (
     from {{ ref('stg_gl_transactions') }}
     where source_system_id is not null   -- null source IDs checked separately (DQ-001)
     group by
-        company_id,
+        entity_id,
         source_system,
         source_system_id
     having count(*) > 1
 )
 
 select
-    d.company_id,
+    d.entity_id,
     d.source_system,
     d.source_system_id,
     d.occurrence_count,

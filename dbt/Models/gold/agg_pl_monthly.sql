@@ -56,9 +56,9 @@ budget as (
     from {{ ref('stg_budget') }} b
     join {{ ref('ref_coa_mapping') }} m
         on  b.local_account_code = m.local_account_code
-        and b.company_id         = m.company_id
+        and b.entity_id         = m.entity_id
     join {{ source('silver', 'dim_entity') }} da
-        on  b.company_id = da.company_id
+        on  b.entity_id = da.entity_id
     where b.budget_version = 'ORIGINAL_BUDGET'
     group by b.period_key, da.entity_key, b.local_account_code, m.l1_category, m.pl_line_item
 

@@ -96,7 +96,7 @@ class TenantRegistry:
                 parts = tenant_spec.strip().split(":")
                 if len(parts) >= 2:
                     tenant_id = parts[0].strip()
-                    company_id = parts[1].strip()
+                    entity_id = parts[1].strip()
 
                     # Schema-per-tenant: use tenant_id as schema prefix
                     self._tenants[tenant_id] = TenantDatabase(

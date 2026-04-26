@@ -67,7 +67,7 @@ dim_project as (
         start_date,
         planned_end_date,
         budget_amount_lcy,
-        company_id
+        entity_id
     from {{ source('silver', 'dim_project') }}
 
 ),

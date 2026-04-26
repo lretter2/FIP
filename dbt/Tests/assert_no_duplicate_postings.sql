@@ -10,7 +10,7 @@
 --  Severity: ERROR — duplicate postings corrupt financial statements.
 --
 --  Note: The row_hash is computed in stg_gl_transactions as SHA-256 of
---        (company_id, account_code, posting_date, document_number, amounts).
+--        (entity_id, account_code, posting_date, document_number, amounts).
 ##############################################################################
 
 -- Returns rows for every duplicate hash found.
@@ -20,17 +20,17 @@ with hash_counts as (
 
     select
         row_hash,
-        company_id,
+        entity_id,
         count(*) as occurrence_count
     from {{ ref('fct_gl_transaction') }}
-    group by row_hash, company_id
+    group by row_hash, entity_id
     having count(*) > 1
 
 )
 
 select
     f.transaction_id,
-    f.company_id,
+    f.entity_id,
     f.local_account_code,
     f.posting_date,
     f.document_number,
@@ -42,5 +42,5 @@ select
 from {{ ref('fct_gl_transaction') }} f
 inner join hash_counts hc
     on  f.row_hash    = hc.row_hash
-    and f.company_id  = hc.company_id
+    and f.entity_id  = hc.entity_id
 order by f.row_hash, f.posting_date

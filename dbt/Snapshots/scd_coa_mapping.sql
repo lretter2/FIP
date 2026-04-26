@@ -30,7 +30,7 @@
 {{
     config(
         target_schema  = 'silver',
-        unique_key     = ['company_id', 'local_account_code'],
+        unique_key     = ['entity_id', 'local_account_code'],
         strategy       = 'check',
         check_cols     = [
             'universal_node',
@@ -51,7 +51,7 @@
 -- Source: the seed table in config schema, enriched with entity defaults
 select
     -- Composite business key
-    coalesce(company_id, 'DEFAULT')             as company_id,
+    coalesce(entity_id, 'DEFAULT')             as entity_id,
     local_account_code,
 
     -- Taxonomy fields (tracked for changes)

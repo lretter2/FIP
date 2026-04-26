@@ -22,7 +22,7 @@ models:
       - name: transaction_id
         description: "Source ERP transaction identifier — passed through from staging"
         tests: [not_null]
-      - name: company_id
+      - name: entity_id
         description: "Legal entity identifier"
         tests: [not_null]
       - name: universal_node
@@ -72,7 +72,7 @@ models:
       - name: transaction_id
         description: "Source ERP transaction identifier"
         tests: [not_null]
-      - name: company_id
+      - name: entity_id
         description: "Legal entity identifier"
         tests: [not_null]
       - name: currency_code

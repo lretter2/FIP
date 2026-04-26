@@ -39,7 +39,7 @@ violations as (
 
     select
         transaction_id,
-        company_id,
+        entity_id,
         currency_code,
         net_amount_lcy,
         net_amount_lcy_fx_adjusted,

@@ -12,7 +12,7 @@
 
 select
     transaction_id,
-    company_id,
+    entity_id,
     local_account_code,
     transaction_date,
     posting_date,

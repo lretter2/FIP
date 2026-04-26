@@ -31,7 +31,7 @@
 with account_universe as (
     -- All distinct account codes that have posted transactions
     select
-        f.company_id,
+        f.entity_id,
         f.local_account_code,
         count(distinct f.transaction_id)  as transaction_count,
         sum(abs(f.net_amount_lcy))        as total_abs_amount_lcy,
@@ -39,14 +39,14 @@ with account_universe as (
     from {{ ref('fct_gl_transaction') }} f
     where f.local_account_code is not null
     group by
-        f.company_id,
+        f.entity_id,
         f.local_account_code
 ),
 
 mapped_accounts as (
     -- Account codes that exist in the CoA seed with a valid universal_node
     select
-        company_id,
+        entity_id,
         local_account_code
     from {{ ref('ref_coa_mapping') }}
     where universal_node is not null
@@ -56,7 +56,7 @@ mapped_accounts as (
 coverage_stats as (
     -- Per-company coverage ratio
     select
-        u.company_id,
+        u.entity_id,
         count(distinct u.local_account_code)                         as total_accounts,
         count(distinct m.local_account_code)                         as mapped_accounts,
         count(distinct u.local_account_code)
@@ -66,13 +66,13 @@ coverage_stats as (
     from account_universe u
     left join mapped_accounts m
         on  m.local_account_code = u.local_account_code
-        and m.company_id         = u.company_id
-    group by u.company_id
+        and m.entity_id         = u.entity_id
+    group by u.entity_id
 ),
 
 failing_companies as (
     -- Companies whose coverage drops below the 95 % threshold
-    select company_id
+    select entity_id
     from coverage_stats
     where coverage_ratio < 0.95
 )
@@ -81,7 +81,7 @@ failing_companies as (
 -- annotated with the company-level coverage ratio so Finance can
 -- prioritise which missing mappings to add first.
 select
-    u.company_id,
+    u.entity_id,
     u.local_account_code,
     u.transaction_count,
     u.total_abs_amount_lcy,
@@ -93,13 +93,13 @@ select
     'COA_MAPPING_BELOW_95_PCT_THRESHOLD' as failure_reason
 from account_universe u
 inner join failing_companies fc
-    on fc.company_id = u.company_id
+    on fc.entity_id = u.entity_id
 inner join coverage_stats s
-    on s.company_id  = u.company_id
+    on s.entity_id  = u.entity_id
 left join mapped_accounts m
     on  m.local_account_code = u.local_account_code
-    and m.company_id         = u.company_id
+    and m.entity_id         = u.entity_id
 where m.local_account_code is null   -- only the unmapped accounts
 order by
-    u.company_id,
+    u.entity_id,
     u.total_abs_amount_lcy desc        -- highest-value unmapped accounts first

@@ -26,7 +26,7 @@ bs as (
         b.period_key,
         b.period_year,
         b.period_month,
-        b.company_id,
+        b.entity_id,
         b.local_account_code,
         b.closing_balance_lcy,
         b.opening_balance_lcy,
@@ -43,7 +43,7 @@ bs as (
 coa as (
 
     select
-        company_id,
+        entity_id,
         local_account_code,
         universal_node,
         account_type,
@@ -56,7 +56,7 @@ coa as (
 
 entity as (
 
-    select entity_key, company_id
+    select entity_key, entity_id
     from {{ source('silver', 'dim_entity') }}
 
 ),
@@ -77,8 +77,8 @@ joined as (
         sum(bs.closing_balance_lcy - bs.opening_balance_lcy) as period_movement_lcy
     from bs
     join coa     c on  bs.local_account_code = c.local_account_code
-                   and bs.company_id         = c.company_id
-    join entity  e on  bs.company_id         = e.company_id
+                   and bs.entity_id         = c.entity_id
+    join entity  e on  bs.entity_id         = e.entity_id
     group by
         bs.period_key, bs.period_year, bs.period_month,
         e.entity_key,

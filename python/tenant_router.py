@@ -38,13 +38,13 @@ class TenantContext:
     """
     tenant_id: str                  # Unique tenant identifier
     user_id: str                    # User making the request
-    company_id: Optional[str]       # Optional: specific company within tenant
+    entity_id: Optional[str]       # Optional: specific company within tenant
     database: TenantDatabase        # Tenant's database configuration
     request_id: str                 # Trace ID for logging
     is_authenticated: bool = True   # Authentication status
 
     def __str__(self):
-        return f"TenantContext(tenant_id={self.tenant_id}, user_id={self.user_id}, company_id={self.company_id})"
+        return f"TenantContext(tenant_id={self.tenant_id}, user_id={self.user_id}, entity_id={self.entity_id})"
 
 
 class TenantAuthenticationError(Exception):
@@ -58,7 +58,7 @@ class AuthResult:
     tenant_id: str
     user_id: str
     method: str
-    company_id: Optional[str] = None
+    entity_id: Optional[str] = None
 
 
 class TenantNotFoundError(Exception):
@@ -88,7 +88,7 @@ class JWTExtractionStrategy:
         return AuthResult(
             tenant_id=auth_data["tenant_id"],
             user_id=auth_data["user_id"],
-            company_id=auth_data.get("company_id"),
+            entity_id=auth_data.get("entity_id"),
             method="JWT",
         )
 
@@ -156,14 +156,14 @@ class TenantRouter:
         self,
         authorization_header: Optional[str],
         headers: Dict[str, str],
-        company_id: Optional[str],
+        entity_id: Optional[str],
     ) -> AuthResult:
         """Iterate strategies in priority order and return the first match."""
         for strategy in self._strategies:
             result = strategy.extract(authorization_header, headers)
             if result is not None:
-                if result.company_id is None and company_id is not None:
-                    result.company_id = company_id
+                if result.entity_id is None and entity_id is not None:
+                    result.entity_id = entity_id
                 return result
         raise TenantAuthenticationError(
             "Missing tenant identification. Provide: "
@@ -179,7 +179,7 @@ class TenantRouter:
         {
           "tenant_id": "tenant_1",
           "user_id": "user@example.com",
-          "company_id": "ENTITY001"  (optional)
+          "entity_id": "ENTITY001"  (optional)
         }
 
         Raises:
@@ -196,7 +196,7 @@ class TenantRouter:
             return {
                 "tenant_id": payload[JWT_TENANT_CLAIM],
                 "user_id": payload.get("user_id", "unknown"),
-                "company_id": payload.get("company_id"),
+                "entity_id": payload.get("entity_id"),
             }
         except jwt.InvalidTokenError as e:
             logger.warning(f"Invalid JWT token: {e}")
@@ -291,7 +291,7 @@ class TenantRouter:
         self,
         authorization_header: Optional[str],
         headers: Dict[str, str],
-        company_id: Optional[str] = None,
+        entity_id: Optional[str] = None,
         request_id: str = "unknown"
     ) -> TenantContext:
         """
@@ -305,7 +305,7 @@ class TenantRouter:
         Args:
           authorization_header: Value of Authorization header
           headers: All request headers
-          company_id: Optional company_id from request body/params
+          entity_id: Optional entity_id from request body/params
           request_id: Trace ID for logging
 
         Returns:
@@ -316,7 +316,7 @@ class TenantRouter:
           TenantNotFoundError: If tenant doesn't exist
         """
 
-        auth = self._authenticate(authorization_header, headers, company_id)
+        auth = self._authenticate(authorization_header, headers, entity_id)
 
         tenant_db = self.validate_tenant(auth.tenant_id)
 
@@ -327,7 +327,7 @@ class TenantRouter:
         context = TenantContext(
             tenant_id=auth.tenant_id,
             user_id=auth.user_id,
-            company_id=auth.company_id,
+            entity_id=auth.entity_id,
             database=tenant_db,
             request_id=request_id,
             is_authenticated=True,
@@ -379,7 +379,7 @@ class TenantRouter:
         """
 
         # Inject RLS WHERE clause if not already present
-        rls_clause = f"WHERE e.tenant_id = ? OR c.company_id IN (SELECT company_id FROM config.tenant_company_map WHERE tenant_id = ?)"
+        rls_clause = f"WHERE e.tenant_id = ? OR c.entity_id IN (SELECT entity_id FROM config.tenant_company_map WHERE tenant_id = ?)"
 
         if "WHERE" not in base_query.upper():
             modified_query = base_query.rstrip(";") + f"\n{rls_clause};"
