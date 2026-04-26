@@ -212,8 +212,13 @@ def load_system_prompt(role: str) -> str:
     try:
         with open(prompt_file, "r", encoding="utf-8") as f:
             return f.read()
-    except (FileNotFoundError, OSError):
-        logger.warning("Prompt file not found for role '%s'; using built-in default system prompt.", role)
+    except (FileNotFoundError, OSError) as e:
+        logger.warning(
+            "System prompt file unavailable at '%s' for role '%s'; using built-in default system prompt. Error: %s",
+            prompt_file,
+            role,
+            str(e),
+        )
         return (
             "You are a helpful financial analyst. Write a concise management commentary "
             "based strictly on the provided variance fact pack."
