@@ -35,3 +35,4 @@ build/
 ### FIP runtime outputs — never commit ###
 # RLS sync audit log contains personal data (email addresses)
 PowerBI/Rls/rls_sync_audit.jsonl
+python/Commentary/__pycache__/

@@ -213,6 +213,7 @@ def load_system_prompt(role: str) -> str:
         with open(prompt_file, "r", encoding="utf-8") as f:
             return f.read()
     except (FileNotFoundError, OSError):
+        logger.warning("Prompt file not found for role '%s'; using built-in default system prompt.", role)
         return (
             "You are a helpful financial analyst. Write a concise management commentary "
             "based strictly on the provided variance fact pack."
@@ -230,6 +231,7 @@ def load_hungarian_translation_prompt() -> str:
         with open(prompt_file, "r", encoding="utf-8") as f:
             return f.read()
     except (FileNotFoundError, OSError):
+        logger.warning("Hungarian translation prompt file not found; using built-in default translation prompt.")
         return (
             "Translate the following management commentary to Hungarian. "
             "Preserve numbers and financial meaning."
