@@ -20,14 +20,23 @@ from typing import Optional, Dict, Any, Callable, List
 from functools import lru_cache, wraps
 from dataclasses import dataclass
 
+import sqlglot
+import sqlglot.expressions as exp
+
 from tenant_config import TenantRegistry, TenantDatabase, get_registry
 
 logger = logging.getLogger(__name__)
 
-# JWT configuration (from environment)
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-prod")
+# JWT configuration (from environment — no insecure defaults)
+JWT_SECRET = os.getenv("JWT_SECRET")  # Required; must be set via environment variable
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_TENANT_CLAIM = os.getenv("JWT_TENANT_CLAIM", "tenant_id")
+
+if not JWT_SECRET:
+    logger.warning(
+        "JWT_SECRET is not set; JWT authentication will be unavailable. "
+        "Set the JWT_SECRET environment variable to enable JWT-based auth."
+    )
 
 
 @dataclass
@@ -183,8 +192,13 @@ class TenantRouter:
         }
 
         Raises:
-          TenantAuthenticationError: If token is invalid or missing tenant_id
+          TenantAuthenticationError: If token is invalid, missing tenant_id,
+                                     or JWT_SECRET is not configured.
         """
+        if not JWT_SECRET:
+            raise TenantAuthenticationError(
+                "JWT authentication is not configured: JWT_SECRET environment variable is missing"
+            )
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
 
@@ -367,27 +381,45 @@ class TenantRouter:
         """
         Apply Row-Level Security filter to prevent cross-tenant queries.
 
+        Uses sqlglot to parse the SQL AST and inject the tenant_id WHERE
+        predicate safely — avoiding brittle string manipulation that can be
+        defeated by subqueries, CTEs, or unusual whitespace.
+
         This is a DEFENSE IN DEPTH measure in case schema isolation fails.
         Every query gets tenant_id filtering automatically.
 
         Args:
           context: Request context with tenant info
-          base_query: Original SQL query
+          base_query: Original SQL query (without trailing semicolons)
 
         Returns:
           (modified_query, parameter_values) for parameterized execution
         """
+        # Strip trailing semicolons before parsing
+        clean_query = base_query.rstrip(";").strip()
+        tenant_condition = exp.EQ(
+            this=exp.Column(this=exp.Identifier(this="tenant_id"), table=exp.Identifier(this="e")),
+            expression=exp.Placeholder(),
+        )
+        try:
+            tree = sqlglot.parse_one(clean_query, dialect="tsql")
+            tree = tree.where(tenant_condition, append=True)
+            modified_query = tree.sql(dialect="tsql")
+        except sqlglot.errors.ParseError:
+            # Fall back to string injection if the query cannot be parsed
+            logger.warning(
+                f"[{context.request_id}] sqlglot could not parse query; "
+                "falling back to string-based RLS injection"
+            )
+            if "WHERE" not in clean_query.upper():
+                modified_query = clean_query + "\nWHERE e.tenant_id = ?"
+            else:
+                modified_query = clean_query + "\nAND e.tenant_id = ?"
 
-        # Inject RLS WHERE clause if not already present
-        rls_clause = f"WHERE e.tenant_id = ? OR c.entity_id IN (SELECT entity_id FROM config.tenant_company_map WHERE tenant_id = ?)"
-
-        if "WHERE" not in base_query.upper():
-            modified_query = base_query.rstrip(";") + f"\n{rls_clause};"
-        else:
-            # Add to existing WHERE
-            modified_query = base_query.rstrip(";") + f"\nAND e.tenant_id = ?;"
-
-        return modified_query, [context.tenant_id, context.tenant_id]
+        logger.debug(
+            f"[{context.request_id}] RLS filter applied for tenant {context.tenant_id}"
+        )
+        return modified_query, [context.tenant_id]
 
     # ─────────────────────────────────────────────────────────────────────────
     # Middleware: Decorator for protecting endpoints
