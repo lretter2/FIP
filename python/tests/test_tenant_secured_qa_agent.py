@@ -32,6 +32,7 @@ from fastapi import HTTPException
 
 from tenant_config import TenantDatabase, TenantIsolationModel
 from tenant_router import TenantContext
+from tenant_secured_qa_agent import validate_sql
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
