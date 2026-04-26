@@ -16,6 +16,7 @@ All API requests MUST pass through this router.
 import logging
 import jwt
 import os
+import re
 from typing import Optional, Dict, Any, Callable, List
 from functools import lru_cache, wraps
 from dataclasses import dataclass
@@ -141,6 +142,45 @@ class HeaderExtractionStrategy:
         if not tenant_id:
             return None
         return AuthResult(tenant_id=tenant_id, user_id="unknown", method="HEADER")
+
+
+def _find_dim_entity_qualifier(tree: exp.Expression) -> Optional[str]:
+    """
+    Scan the parsed SQL AST for a ``dim_entity`` table reference and return the
+    alias used for it (or the bare table name when the reference is unaliased).
+    Returns ``None`` when ``dim_entity`` is not referenced in the query at all.
+
+    Works regardless of schema prefix (e.g. ``silver.dim_entity e`` and
+    ``tenant_1_.silver.dim_entity e`` both resolve to ``"e"``).
+    """
+    for table in tree.find_all(exp.Table):
+        if (table.name or "").lower() == "dim_entity":
+            return table.alias or table.name
+    return None
+
+
+def _inject_rls_string_fallback(sql: str) -> str:
+    """
+    Clause-aware string injection of an unqualified ``tenant_id = ?`` predicate.
+
+    Used only when sqlglot cannot parse the query.  The predicate is inserted
+    *before* GROUP BY / HAVING / ORDER BY so the resulting SQL remains valid.
+    The column qualifier is intentionally omitted because we cannot determine the
+    correct alias from an unparseable query; schema-per-tenant isolation is the
+    primary defence in this edge case.
+    """
+    clause_re = re.compile(r"\b(GROUP\s+BY|HAVING|ORDER\s+BY)\b", re.IGNORECASE)
+    match = clause_re.search(sql)
+    if match:
+        pos = match.start()
+        prefix = sql[:pos]
+        suffix = sql[pos:]
+        if "WHERE" not in prefix.upper():
+            return prefix.rstrip() + "\nWHERE tenant_id = ?\n" + suffix
+        return prefix.rstrip() + "\nAND tenant_id = ?\n" + suffix
+    if "WHERE" not in sql.upper():
+        return sql + "\nWHERE tenant_id = ?"
+    return sql + "\nAND tenant_id = ?"
 
 
 class TenantRouter:
@@ -386,12 +426,22 @@ class TenantRouter:
         """
         Apply Row-Level Security filter to prevent cross-tenant queries.
 
-        Uses sqlglot to parse the SQL AST and inject the tenant_id WHERE
-        predicate safely — avoiding brittle string manipulation that can be
-        defeated by subqueries, CTEs, or unusual whitespace.
+        Uses sqlglot to parse the SQL AST and inject a ``tenant_id = ?``
+        WHERE predicate safely — handling JOINs, subqueries, CTEs, and
+        queries with existing WHERE / GROUP BY / ORDER BY clauses.
+
+        The column qualifier is resolved dynamically from the AST:
+          - If the query references ``dim_entity`` (with any schema prefix),
+            the predicate uses its alias (or table name if unaliased):
+            ``<alias>.tenant_id = ?``
+          - Otherwise an unqualified ``tenant_id = ?`` is injected, letting the
+            database engine resolve the column; schema-per-tenant isolation
+            remains the primary security layer in that case.
+
+        Falls back to a clause-aware string injection if sqlglot cannot parse
+        the query (always inserts before GROUP BY / HAVING / ORDER BY).
 
         This is a DEFENSE IN DEPTH measure in case schema isolation fails.
-        Every query gets tenant_id filtering automatically.
 
         Args:
           context: Request context with tenant info
@@ -400,26 +450,39 @@ class TenantRouter:
         Returns:
           (modified_query, parameter_values) for parameterized execution
         """
-        # Strip trailing semicolons before parsing
         clean_query = base_query.rstrip(";").strip()
-        tenant_condition = exp.EQ(
-            this=exp.Column(this=exp.Identifier(this="tenant_id"), table=exp.Identifier(this="e")),
-            expression=exp.Placeholder(),
-        )
+
         try:
             tree = sqlglot.parse_one(clean_query, dialect="tsql")
+
+            # Resolve the qualifier (alias or table name) for dim_entity
+            qualifier = _find_dim_entity_qualifier(tree)
+
+            if qualifier:
+                tenant_condition = exp.EQ(
+                    this=exp.Column(
+                        this=exp.Identifier(this="tenant_id"),
+                        table=exp.Identifier(this=qualifier),
+                    ),
+                    expression=exp.Placeholder(),
+                )
+            else:
+                # No dim_entity reference — inject an unqualified tenant_id
+                # predicate; schema-per-tenant is the primary isolation layer.
+                tenant_condition = exp.EQ(
+                    this=exp.Column(this=exp.Identifier(this="tenant_id")),
+                    expression=exp.Placeholder(),
+                )
+
             tree = tree.where(tenant_condition, append=True)
             modified_query = tree.sql(dialect="tsql")
+
         except sqlglot.errors.ParseError:
-            # Fall back to string injection if the query cannot be parsed
             logger.warning(
                 f"[{context.request_id}] sqlglot could not parse query; "
-                "falling back to string-based RLS injection"
+                "falling back to clause-aware string-based RLS injection"
             )
-            if "WHERE" not in clean_query.upper():
-                modified_query = clean_query + "\nWHERE e.tenant_id = ?"
-            else:
-                modified_query = clean_query + "\nAND e.tenant_id = ?"
+            modified_query = _inject_rls_string_fallback(clean_query)
 
         logger.debug(
             f"[{context.request_id}] RLS filter applied for tenant {context.tenant_id}"
