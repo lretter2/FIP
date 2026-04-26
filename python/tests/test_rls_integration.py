@@ -215,12 +215,14 @@ class TestApplyRlsFilterStructural:
         sql, params = router.apply_rls_filter(ctx, "SELECT * FROM gold.kpi_profitability f")
         assert "WHERE" in sql.upper()
         assert "tenant_1" in params
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
     def test_existing_where_uses_and(self, router):
         ctx = _make_ctx("tenant_1")
         sql, params = router.apply_rls_filter(ctx, "SELECT * FROM gold.kpi_profitability WHERE period_key = 202601")
         assert "AND" in sql.upper()
         assert "tenant_1" in params
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
     def test_inner_join_no_where_injects_where(self, router):
         ctx = _make_ctx("tenant_1")
@@ -231,6 +233,7 @@ class TestApplyRlsFilterStructural:
         sql, params = router.apply_rls_filter(ctx, base)
         assert "WHERE" in sql.upper()
         assert "tenant_1" in params
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
     def test_inner_join_existing_where_appends_and(self, router):
         ctx = _make_ctx("tenant_1")
@@ -242,6 +245,7 @@ class TestApplyRlsFilterStructural:
         sql, params = router.apply_rls_filter(ctx, base)
         assert "AND" in sql.upper()
         assert "tenant_1" in params
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
     def test_left_join_no_where_injects_where(self, router):
         ctx = _make_ctx("tenant_1")
@@ -252,6 +256,7 @@ class TestApplyRlsFilterStructural:
         sql, params = router.apply_rls_filter(ctx, base)
         assert "WHERE" in sql.upper()
         assert "tenant_1" in params
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
     def test_left_join_existing_where_appends_and(self, router):
         ctx = _make_ctx("tenant_1")
@@ -263,6 +268,7 @@ class TestApplyRlsFilterStructural:
         sql, params = router.apply_rls_filter(ctx, base)
         assert "AND" in sql.upper()
         assert "tenant_1" in params
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
     def test_subquery_in_from_injects_at_outer_level(self, router):
         ctx = _make_ctx("tenant_1")
@@ -273,6 +279,7 @@ class TestApplyRlsFilterStructural:
         sql, params = router.apply_rls_filter(ctx, base)
         assert "WHERE" in sql.upper() or "AND" in sql.upper()
         assert "tenant_1" in params
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
     def test_cte_injects_at_outer_select(self, router):
         ctx = _make_ctx("tenant_1")
@@ -284,6 +291,7 @@ class TestApplyRlsFilterStructural:
         sql, params = router.apply_rls_filter(ctx, base)
         assert "WHERE" in sql.upper()
         assert "tenant_1" in params
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
     def test_trailing_semicolon_not_duplicated(self, router):
         ctx = _make_ctx("tenant_1")
@@ -306,6 +314,7 @@ class TestApplyRlsFilterStructural:
         sql, params = router.apply_rls_filter(ctx, base)
         assert "WHERE" in sql.upper()
         assert "tenant_1" in params
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
     def test_multiple_joins_existing_where(self, router):
         ctx = _make_ctx("tenant_1")
@@ -317,7 +326,7 @@ class TestApplyRlsFilterStructural:
         sql, params = router.apply_rls_filter(ctx, base)
         assert "AND" in sql.upper()
         assert "tenant_1" in params
-
+        assert sqlglot.parse_one(sql, dialect="tsql") is not None
 
 # ── Cross-tenant isolation ─────────────────────────────────────────────────────
 
