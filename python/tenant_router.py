@@ -28,8 +28,8 @@ from tenant_config import TenantRegistry, TenantDatabase, get_registry
 
 logger = logging.getLogger(__name__)
 
-# JWT configuration (from environment — no insecure defaults)
-JWT_SECRET = os.getenv("JWT_SECRET")  # Required; must be set via environment variable
+# JWT configuration (from environment — no insecure fallback)
+JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_TENANT_CLAIM = os.getenv("JWT_TENANT_CLAIM", "tenant_id")
 
@@ -245,6 +245,11 @@ class TenantRouter:
                 "JWT authentication is not configured: JWT_SECRET environment variable is missing"
             )
         try:
+            if not JWT_SECRET:
+                raise TenantAuthenticationError(
+                    "JWT_SECRET environment variable is not configured. "
+                    "Set it in your environment or Azure Key Vault before starting the application."
+                )
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
 
             if JWT_TENANT_CLAIM not in payload:
@@ -474,19 +479,25 @@ class TenantRouter:
                     expression=exp.Placeholder(),
                 )
 
-            tree = tree.where(tenant_condition, append=True)
-            modified_query = tree.sql(dialect="tsql")
-
-        except sqlglot.errors.ParseError:
-            logger.warning(
-                f"[{context.request_id}] sqlglot could not parse query; "
-                "falling back to clause-aware string-based RLS injection"
-            )
-            modified_query = _inject_rls_string_fallback(clean_query)
-
-        logger.debug(
-            f"[{context.request_id}] RLS filter applied for tenant {context.tenant_id}"
+        # Apply RLS in an outer query so we do not rely on fragile string parsing
+        # of the inner SQL. This preserves the semantics of any existing WHERE /
+        # OR logic in the original query and avoids invalid SQL when WHERE appears
+        # only inside nested subqueries or CTEs.
+        sanitized_query = base_query.rstrip().rstrip(";")
+        outer_alias = "tenant_scoped_query"
+        rls_condition = (
+            f"{outer_alias}.entity_key IN (\n"
+            "    SELECT entity_key FROM config.tenant_company_map\n"
+            "    WHERE tenant_id = ?\n"
+            ")"
         )
+
+        modified_query = (
+            "SELECT *\n"
+            f"FROM (\n{sanitized_query}\n) AS {outer_alias}\n"
+            f"WHERE {rls_condition};"
+        )
+
         return modified_query, [context.tenant_id]
 
     # ─────────────────────────────────────────────────────────────────────────
