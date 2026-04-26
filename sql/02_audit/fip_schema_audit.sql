@@ -289,10 +289,6 @@ COMMENT ON VIEW audit.v_alert_summary IS 'Aggregated open alert counts by entity
 --
 --  Called by ADF pipeline step "RunAnomalyDetection" via Databricks
 --  or directly via Azure SQL stored procedure call.
---
---  NOTE: Depends on gold.kpi_profitability and gold.kpi_liquidity views
---        (defined in fip_schema_gold.sql). Run this procedure creation
---        after the Gold schema has been deployed.
 -- =============================================================================
 
 CREATE OR REPLACE PROCEDURE audit.proc_evaluate_alerts(
@@ -311,7 +307,7 @@ DECLARE
     v_threshold_breached BOOLEAN;
     v_invalid_scope_count INT;
 BEGIN
-    -- SQL-02 / T-02 GUARD: Validate that all active entity-specific alert rules reference
+    -- Validate that all active entity-specific alert rules reference
     -- a valid entity_code. Mistyped entity_scope = 'ACME_HU2' would silently never fire.
     SELECT COUNT(*) INTO v_invalid_scope_count
     FROM config.ref_alert_rules r
@@ -324,7 +320,7 @@ BEGIN
     IF v_invalid_scope_count > 0 THEN
         RAISE WARNING 'proc_evaluate_alerts: % alert rule(s) have entity_scope values that do not match any active entity_code in dim_entity. These rules will never fire. Check config.ref_alert_rules.entity_scope.', v_invalid_scope_count;
     END IF;
-    -- T-02 NOTE: The platform uses three different entity identifiers:
+    -- The platform uses three different entity identifiers:
     --   config.ref_entity_master.entity_id   UUID  — canonical PK for FK relationships
     --   silver.dim_entity.entity_key         INT   — integer surrogate for fact table FK joins
     --   config.ref_alert_rules.entity_scope  VARCHAR(20) — human-readable entity_code for rule config
@@ -417,17 +413,6 @@ COMMENT ON PROCEDURE audit.proc_evaluate_alerts IS 'Evaluates all active alert r
 -- =============================================================================
 --  3.7 COMMENTARY QUEUE
 --  AI-generated financial narrative approval workflow.
---  The Python commentary_generator.py module writes PENDING_REVIEW rows here.
---  The CFO Portal reads the queue for review; approved rows are published to
---  gold.ai_commentary and surfaced in Power BI dashboards.
---
---  Lifecycle:
---    PENDING_REVIEW  →  APPROVED  →  published to gold.ai_commentary
---                    →  REJECTED  →  commentary_generator retries next cycle
---                    →  SUPERSEDED (earlier draft when re-run in same period)
---
---  FIXES: FINDING A-12 — table was previously absent, causing runtime INSERT
---         failures in commentary_generator.py on every monthly close.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS audit.commentary_queue (
