@@ -252,8 +252,12 @@ class TestApplyRlsFilter:
         ctx = self._ctx()
         query = "SELECT * FROM t WHERE period_key = 202601"
         modified, params = router.apply_rls_filter(ctx, query)
-        assert "AND" in modified
-        assert "tenant_1" in params
+        # Safe wrapper approach: original WHERE is preserved in the inner query;
+        # RLS is applied in the outer WHERE clause via a subquery.
+        assert "WHERE period_key = 202601" in modified
+        assert "config.tenant_company_map" in modified
+        assert "tenant_scoped_query.entity_key" in modified
+        assert params == ["tenant_1"]
 
     def test_tenant_id_injected_into_params(self, router):
         ctx = self._ctx(tenant_id="tenant_99")

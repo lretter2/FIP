@@ -370,24 +370,40 @@ class TenantRouter:
         This is a DEFENSE IN DEPTH measure in case schema isolation fails.
         Every query gets tenant_id filtering automatically.
 
+        Uses a safe outer-query wrapping approach: the original query is wrapped
+        in a subquery and the RLS condition is applied in the outer WHERE clause.
+        This avoids fragile SQL string-parsing (CTEs, subqueries, nested WHEREs,
+        string literals containing "WHERE", etc.).
+
+        Preconditions:
+          - base_query must not contain its own parameterized placeholders (?);
+            any query parameters should be bound separately before calling this method.
+          - All financial queries must expose an ``entity_key`` column so the outer
+            RLS filter (``tenant_scoped_query.entity_key IN (...)``) can be applied.
+
         Args:
           context: Request context with tenant info
-          base_query: Original SQL query
+          base_query: Original SQL query (must not contain unbound ? placeholders)
 
         Returns:
-          (modified_query, parameter_values) for parameterized execution
+          (modified_query, parameter_values) — exactly one parameter value (tenant_id)
+          matching the single ? placeholder in the outer RLS subquery.
         """
 
-        # Inject RLS WHERE clause if not already present
-        rls_clause = f"WHERE e.tenant_id = ? OR c.entity_id IN (SELECT entity_id FROM config.tenant_company_map WHERE tenant_id = ?)"
+        # SELECT * is intentional here: the inner query defines the projection;
+        # the outer SELECT simply passes all columns through while adding the RLS filter.
+        clean_query = base_query.rstrip(";")
+        modified_query = (
+            "SELECT *\n"
+            "FROM (\n"
+            f"  {clean_query}\n"
+            ") AS tenant_scoped_query\n"
+            "WHERE tenant_scoped_query.entity_key IN (\n"
+            "  SELECT entity_key FROM config.tenant_company_map WHERE tenant_id = ?\n"
+            ");"
+        )
 
-        if "WHERE" not in base_query.upper():
-            modified_query = base_query.rstrip(";") + f"\n{rls_clause};"
-        else:
-            # Add to existing WHERE
-            modified_query = base_query.rstrip(";") + f"\nAND e.tenant_id = ?;"
-
-        return modified_query, [context.tenant_id, context.tenant_id]
+        return modified_query, [context.tenant_id]
 
     # ─────────────────────────────────────────────────────────────────────────
     # Middleware: Decorator for protecting endpoints
