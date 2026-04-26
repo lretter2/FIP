@@ -50,7 +50,13 @@ logger = logging.getLogger("FIP.CommentaryGenerator")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
 MATERIALITY_THRESHOLD = float(os.getenv("MATERIALITY_THRESHOLD_PCT", "5.0"))
 MAX_COMMENTARY_WORDS = int(os.getenv("MAX_COMMENTARY_WORDS", "600"))
-PROMPT_DIR = os.path.join(os.path.dirname(__file__), "../../prompts")
+_PROMPT_DIR_LOCAL = os.path.join(os.path.dirname(__file__), "../../prompts")    # <repo>/python/prompts
+_PROMPT_DIR_ROOT = os.path.join(os.path.dirname(__file__), "../../../prompts")  # <repo>/prompts
+PROMPT_DIR = (
+    _PROMPT_DIR_LOCAL if os.path.exists(_PROMPT_DIR_LOCAL)
+    else _PROMPT_DIR_ROOT if os.path.exists(_PROMPT_DIR_ROOT)
+    else os.path.dirname(os.path.abspath(__file__))  # fall back to script's own directory
+)
 VALIDATION_SCHEMA_FILE = os.path.join(PROMPT_DIR, "input_validation.txt")
 
 _MONTH_NAMES = [
