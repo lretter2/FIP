@@ -436,14 +436,15 @@ def send_critical_alerts(anomalies: list[dict], entity_code: str, period_key: in
 def main():
     parser = argparse.ArgumentParser(description="FIP Anomaly Detection Agent")
     parser.add_argument("--entity_code", required=False, help="Entity code (canonical key)")
-    parser.add_argument("--entity_id",  required=False, help="Deprecated alias for --entity_code")
-    parser.add_argument("--period_key",  required=True, type=int, help="Period key YYYYMM")
-    parser.add_argument("--lookback",    default=24,    type=int, help="Lookback months for baseline")
+    parser.add_argument("--entity_id", required=False, help="Deprecated alias for --entity_code")
+    parser.add_argument("--company_id", required=False, help="Deprecated alias for --entity_code")
+    parser.add_argument("--period_key", required=True, type=int, help="Period key YYYYMM")
+    parser.add_argument("--lookback", default=24, type=int, help="Lookback months for baseline")
     args = parser.parse_args()
 
-    entity_code = args.entity_code or args.entity_id
+    entity_code = args.entity_code or args.entity_id or args.company_id
     if not entity_code:
-        raise ValueError("Provide --entity_code (or legacy --entity_id)")
+        raise ValueError("Provide --entity_code (or legacy --entity_id/--company_id)")
 
     logger.info(f"Starting anomaly detection: entity_code={entity_code}, period={args.period_key}")
 
