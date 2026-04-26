@@ -254,9 +254,9 @@ def sync_roles(role_filter: str | None = None, dry_run: bool = False):
             log.info(f"  ✅ No changes required ({len(current_upns)} members)")
         else:
             if added:
-                log.info(f"  ➕ Adding   {len(added):2d} members: {', '.join(added[:3])}{'...' if len(added) > 3 else ''}")
+                log.info(f"  ➕ Adding   {len(added):2d} members")
             if removed:
-                log.info(f"  ➖ Removing {len(removed):2d} members: {', '.join(removed[:3])}{'...' if len(removed) > 3 else ''}")
+                log.info(f"  ➖ Removing {len(removed):2d} members")
 
             if not dry_run:
                 set_rls_members(workspace_id, dataset_id, role_name, sorted(target_upns), pbi_token)
