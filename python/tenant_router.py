@@ -151,6 +151,22 @@ class TenantRouter:
             if os.getenv("ALLOW_HEADER_AUTH", "false").lower() == "true":
                 default_strategies.append(HeaderExtractionStrategy(self))
             self._strategies = default_strategies
+
+        jwt_enabled = any(
+            isinstance(strategy, JWTExtractionStrategy)
+            for strategy in self._strategies
+        )
+        self.jwt_secret: Optional[str] = None
+        if jwt_enabled:
+            self.jwt_secret = os.environ.get("JWT_SECRET")
+            if not self.jwt_secret:
+                raise ValueError(
+                    "JWT_SECRET environment variable is required when "
+                    "JWTExtractionStrategy is enabled"
+                )
+            global JWT_SECRET
+            JWT_SECRET = self.jwt_secret
+
         logger.info("TenantRouter initialized")
 
     # ─────────────────────────────────────────────────────────────────────────
