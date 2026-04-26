@@ -1,9 +1,10 @@
 """Unit tests for tenant_secured_qa_agent helper functions.
 
-Only pure logic helpers (build_tenant_aware_query) are covered here.
-FastAPI endpoint tests require a running server and are out of scope
-for this unit-test suite.
+Only pure logic helpers (build_tenant_aware_query, validate_nl_query, validate_sql)
+are covered here.  FastAPI endpoint tests require a running server and are out of
+scope for this unit-test suite.
 """
+import pytest
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock
@@ -26,6 +27,8 @@ _db_utils_stub = ModuleType("db_utils")
 _db_utils_stub.get_db_connection = MagicMock()  # type: ignore[attr-defined]
 _db_utils_stub.get_openai_client = MagicMock()  # type: ignore[attr-defined]
 sys.modules.setdefault("db_utils", _db_utils_stub)
+
+from fastapi import HTTPException
 
 from tenant_config import TenantDatabase, TenantIsolationModel
 from tenant_router import TenantContext
@@ -146,3 +149,125 @@ class TestBuildTenantAwareQuery:
         ctx = _make_context("tenant_1")
         sql, _ = self._run(ctx, "SELECT * FROM audit.anomaly_queue")
         assert "FROM audit.anomaly_queue" in sql
+
+
+# ── validate_nl_query ─────────────────────────────────────────────────────────
+
+class TestValidateNlQuery:
+    """Tests for validate_nl_query — ensures raw SQL is rejected."""
+
+    def setup_method(self):
+        import tenant_secured_qa_agent as qa
+        self.validate = qa.validate_nl_query
+
+    # Happy paths — natural-language questions must pass
+
+    def test_natural_language_question_passes(self):
+        self.validate("What was the EBITDA margin in Q1 2026?")
+
+    def test_natural_language_trend_passes(self):
+        self.validate("Show me the revenue trend for the last 6 months")
+
+    def test_natural_language_comparison_passes(self):
+        self.validate("How does actual OPEX compare to budget?")
+
+    # Blocked: queries that start with SQL statement keywords
+
+    def test_select_statement_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("SELECT * FROM gold.fct_gl_transaction")
+        assert exc_info.value.status_code == 422
+
+    def test_with_cte_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("WITH cte AS (SELECT 1) SELECT * FROM cte")
+        assert exc_info.value.status_code == 422
+
+    def test_insert_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("INSERT INTO gold.t VALUES (1, 2)")
+        assert exc_info.value.status_code == 422
+
+    def test_update_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("UPDATE gold.t SET x = 1")
+        assert exc_info.value.status_code == 422
+
+    def test_delete_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("DELETE FROM gold.t")
+        assert exc_info.value.status_code == 422
+
+    # Blocked: queries that contain dangerous keywords mid-string
+
+    def test_drop_keyword_in_nl_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("drop table please")
+        assert exc_info.value.status_code == 422
+
+    def test_truncate_keyword_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("TRUNCATE the budget table")
+        assert exc_info.value.status_code == 422
+
+    def test_exec_keyword_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("EXEC sp_rename 'old', 'new'")
+        assert exc_info.value.status_code == 422
+
+    # Case-insensitivity
+
+    def test_lowercase_select_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("select id from users")
+        assert exc_info.value.status_code == 422
+
+    def test_mixed_case_drop_rejected(self):
+        with pytest.raises(HTTPException) as exc_info:
+            self.validate("DrOp table sensitive_data")
+        assert exc_info.value.status_code == 422
+
+
+# ── validate_sql ──────────────────────────────────────────────────────────────
+
+class TestValidateSql:
+    """Tests for validate_sql — verifies LLM-generated SQL safety checks."""
+
+    def setup_method(self):
+        import tenant_secured_qa_agent as qa
+        self.validate = qa.validate_sql
+
+    def test_valid_select_passes(self):
+        sql = "SELECT period_key, entity_name FROM gold.kpi_profitability JOIN silver.dim_entity e ON kpi.entity_key = e.entity_key"
+        ok, reason = self.validate(sql)
+        assert ok is True
+        assert reason == "OK"
+
+    def test_valid_with_cte_passes(self):
+        sql = "WITH base AS (SELECT 1 AS x) SELECT x FROM base"
+        ok, _ = self.validate(sql)
+        assert ok is True
+
+    def test_drop_blocked(self):
+        ok, reason = self.validate("DROP TABLE gold.sensitive")
+        assert ok is False
+        assert "DROP" in reason
+
+    def test_delete_blocked(self):
+        ok, reason = self.validate("DELETE FROM gold.fct")
+        assert ok is False
+
+    def test_non_select_blocked(self):
+        ok, reason = self.validate("EXEC xp_cmdshell('dir')")
+        assert ok is False
+
+    def test_unauthorised_schema_blocked(self):
+        ok, reason = self.validate("SELECT * FROM bronze.raw_data")
+        assert ok is False
+        assert "bronze" in reason.lower()
+
+    def test_config_schema_allowed(self):
+        # config schema (used for RLS maps) must be allowed
+        sql = "SELECT * FROM gold.t JOIN config.tenant_company_map m ON t.entity_key = m.entity_key WHERE m.tenant_id = ?"
+        ok, _ = self.validate(sql)
+        assert ok is True

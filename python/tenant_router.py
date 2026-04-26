@@ -24,8 +24,8 @@ from tenant_config import TenantRegistry, TenantDatabase, get_registry
 
 logger = logging.getLogger(__name__)
 
-# JWT configuration (from environment)
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-prod")
+# JWT configuration (from environment — no insecure fallback)
+JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_TENANT_CLAIM = os.getenv("JWT_TENANT_CLAIM", "tenant_id")
 
@@ -186,6 +186,11 @@ class TenantRouter:
           TenantAuthenticationError: If token is invalid or missing tenant_id
         """
         try:
+            if not JWT_SECRET:
+                raise TenantAuthenticationError(
+                    "JWT_SECRET environment variable is not configured. "
+                    "Set it in your environment or Azure Key Vault before starting the application."
+                )
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
 
             if JWT_TENANT_CLAIM not in payload:
@@ -378,16 +383,26 @@ class TenantRouter:
           (modified_query, parameter_values) for parameterized execution
         """
 
-        # Inject RLS WHERE clause if not already present
-        rls_clause = f"WHERE e.tenant_id = ? OR c.entity_id IN (SELECT entity_id FROM config.tenant_company_map WHERE tenant_id = ?)"
+        # Inject RLS WHERE clause using a subquery against the canonical tenant→entity
+        # mapping table.  This avoids relying on outer-query aliases (e / c) and always
+        # produces exactly ONE bind parameter.
+        #
+        # Primary isolation is guaranteed by the schema-per-tenant prefix that
+        # build_tenant_aware_query applies; this clause is defence-in-depth.
+        rls_condition = (
+            "entity_key IN (\n"
+            "    SELECT entity_key FROM config.tenant_company_map\n"
+            "    WHERE tenant_id = ?\n"
+            ")"
+        )
 
         if "WHERE" not in base_query.upper():
-            modified_query = base_query.rstrip(";") + f"\n{rls_clause};"
+            modified_query = base_query.rstrip(";") + f"\nWHERE {rls_condition};"
         else:
-            # Add to existing WHERE
-            modified_query = base_query.rstrip(";") + f"\nAND e.tenant_id = ?;"
+            # Append to existing WHERE clause
+            modified_query = base_query.rstrip(";") + f"\nAND {rls_condition};"
 
-        return modified_query, [context.tenant_id, context.tenant_id]
+        return modified_query, [context.tenant_id]
 
     # ─────────────────────────────────────────────────────────────────────────
     # Middleware: Decorator for protecting endpoints
