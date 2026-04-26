@@ -31,10 +31,6 @@ COMMENT ON SCHEMA config IS 'Reference and configuration tables. Manually seeded
 
 -- =============================================================================
 --  2.1 ENTITY MASTER
---  Every legal entity that will have financial data in the platform.
---  Parent-child relationship enables multi-entity consolidation.
---  Must be populated before account_master, because account_master
---  references company_id which must exist here.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_entity_master (
@@ -68,9 +64,6 @@ COMMENT ON COLUMN config.ref_entity_master.consolidation_method    IS 'FULL = 10
 
 -- =============================================================================
 --  2.2 CURRENCY MASTER
---  All currencies that appear in any source system transaction.
---  The pipeline will reject any transaction with a currency_code
---  not present in this table (DQ rule DB-006).
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_currencies (
@@ -104,10 +97,6 @@ COMMENT ON COLUMN config.ref_currencies.nbh_feed_code IS 'Code as returned by th
 
 -- =============================================================================
 --  2.3 NBH DAILY FX RATES
---  Populated daily by the ADF pipeline that calls the MNB/NBH SOAP API.
---  Silver-layer transformations JOIN to this table to convert all
---  non-HUF amounts into the reporting currency (HUF).
---  DQ rule DB-007 alerts if a rate is missing for a transaction date.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_fx_rates (
@@ -130,9 +119,6 @@ COMMENT ON COLUMN config.ref_fx_rates.rate_to_huf IS 'Middle rate (középárfol
 -- =============================================================================
 --  2.4 FISCAL CALENDAR CONFIGURATION
 --  Defines how each entity's fiscal year maps to calendar months.
---  Required by dim_date generation and period_id calculations.
---  Most Hungarian companies use the calendar year (Jan=1), but
---  some subsidiaries or foreign-owned entities may differ.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_fiscal_calendar (
@@ -159,10 +145,6 @@ COMMENT ON COLUMN config.ref_fiscal_calendar.is_closed IS 'When TRUE, any new tr
 
 -- =============================================================================
 --  2.5 CHART OF ACCOUNTS MAPPING
---  The single most important configuration table.
---  Maps every local HU GAAP account code to the universal taxonomy node.
---  Coverage must be >95% before go-live (DQ monitoring surfaces gaps).
---  Source of truth for the dbt seed file ref_coa_mapping.csv.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_coa_mapping (
@@ -197,24 +179,13 @@ CREATE INDEX IF NOT EXISTS idx_coa_entity_code  ON config.ref_coa_mapping (entit
 CREATE INDEX IF NOT EXISTS idx_coa_universal    ON config.ref_coa_mapping (universal_node);
 CREATE INDEX IF NOT EXISTS idx_coa_review       ON config.ref_coa_mapping (review_status) WHERE review_status != 'APPROVED';
 
-COMMENT ON TABLE  config.ref_coa_mapping IS 'THE most critical configuration table. Maps every local HU GAAP account code to a universal taxonomy node. Poor mapping quality directly produces wrong KPIs. Every row must have review_status=APPROVED by a qualified accountant before the entity goes live. The pipeline dashboard shows mapping coverage % prominently.
--- T-01 ARCHITECTURE NOTE — 3-table account data flow (NOT redundancy):
---   1. config.ref_coa_mapping   = INPUT: finance team manually seeds this; source of truth for mappings
---   2. silver.account_master    = GOVERNANCE LAYER: dbt enriches ref_coa_mapping with HU GAAP statutory
---                                  fields (hu_gaap_bs_line, hu_gaap_pl_line, bs_section, is_reconciling),
---                                  review workflow (mapping_reviewed_by, dbt_run_id), and temporal validity.
---   3. silver.dim_account       = ANALYTICS LAYER: integer surrogate key copy used for all FK joins in facts.
---   Overlap is intentional by design (input → governance → analytics).
---   Maintenance risk: if a field is corrected in ref_coa_mapping, dbt must be re-run to propagate to
---   account_master and dim_account. Manual edits to account_master are overwritten on next dbt run.';
+COMMENT ON TABLE  config.ref_coa_mapping IS 'THE most critical configuration table. Maps every local HU GAAP account code to a universal taxonomy node. Poor mapping quality directly produces wrong KPIs. Every row must have review_status=APPROVED by a qualified accountant before the entity goes live. The pipeline dashboard shows mapping coverage % prominently.'
 COMMENT ON COLUMN config.ref_coa_mapping.pl_line_item IS 'P&L line assignment used by the Gold Zone agg_pl_monthly model. Must be set for all income statement accounts. Balance sheet accounts leave this NULL.';
 COMMENT ON COLUMN config.ref_coa_mapping.cf_classification IS 'Cash flow statement classification. Required for the indirect method cash flow model in Gold Zone. OPERATING for most OPEX; INVESTING for CapEx; FINANCING for debt service and equity movements.';
 
 
 -- =============================================================================
 --  2.6 COST CENTRE MASTER
---  Organisational units that own costs. Required before any transaction
---  can be assigned to a cost centre in the Silver layer.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_cost_centre_master (
@@ -243,7 +214,6 @@ COMMENT ON TABLE config.ref_cost_centre_master IS 'All organisational units that
 
 -- =============================================================================
 --  2.7 PROJECT MASTER
---  Required for project-level P&L tracking and WBS integration with SAP.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_project_master (
@@ -270,8 +240,6 @@ COMMENT ON TABLE config.ref_project_master IS 'Project master for project-level 
 -- =============================================================================
 --  2.8 INTERCOMPANY REGISTRY
 --  Defines which entity pairs have intercompany transactions.
---  Required by the consolidation engine to identify and eliminate
---  intercompany balances. Only needed for multi-entity deployments.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_intercompany_pairs (
@@ -287,14 +255,11 @@ CREATE TABLE IF NOT EXISTS config.ref_intercompany_pairs (
     UNIQUE (seller_entity_id, buyer_entity_id, transaction_type)
 );
 
-COMMENT ON TABLE config.ref_intercompany_pairs IS 'Defines all known intercompany transaction relationships within the group. The consolidation dbt model uses this registry to automatically flag and eliminate intercompany balances.
+COMMENT ON TABLE config.ref_intercompany_pairs IS 'Defines all known intercompany transaction relationships within the group. The consolidation dbt model uses this registry to automatically flag and eliminate intercompany balances.'
 
 
 -- =============================================================================
 --  2.9 ALERT RULES CONFIGURATION
---  Every automated alert that the platform can trigger is defined here.
---  The post-pipeline stored procedure reads this table after every
---  Gold Zone refresh and raises alerts against the alert_log table.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_alert_rules (
@@ -337,8 +302,6 @@ COMMENT ON TABLE  config.ref_alert_rules IS 'Single source of truth for all auto
 
 -- =============================================================================
 --  2.10 HUNGARIAN PUBLIC HOLIDAYS
---  Source for the is_hungarian_public_holiday flag in dim_date.
---  Must be maintained annually by the data team.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.ref_hu_public_holidays (
@@ -467,8 +430,6 @@ COMMENT ON VIEW config.v_mapping_coverage IS 'Real-time mapping coverage KPI per
 
 -- =============================================================================
 --  2.11 RLS USER-ENTITY MAP
---  Canonical RLS mapping table (business key: entity_code).
---  Maps AAD user principals to entities they are authorised to access.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS config.rls_user_entity_map (
@@ -493,7 +454,7 @@ CREATE INDEX IF NOT EXISTS idx_rls_entity_active
     WHERE is_active = TRUE;
 
 COMMENT ON TABLE config.rls_user_entity_map IS
-    'RLS mapping between users and legal entities. Canonical business key is entity_code; '
+    RLS mapping between users and legal entities. Canonical business key is entity_code; 
     'entity_id is retained as FK for referential integrity.';
 
 -- Seed deterministic baseline mappings from entity data_owner where available.
@@ -513,7 +474,6 @@ ON CONFLICT (user_id, entity_id) DO NOTHING;
 
 -- =============================================================================
 --  END OF fip_schema_config.sql
---  Next file to run: fip_schema_audit.sql
 -- =============================================================================
 _part_1_of_2_# Financial Intelligence Platform — Conversational Q&A Agent (RAG + Text-to-SQL)
 ===============================================================================
@@ -530,8 +490,8 @@ Pipeline:
   6. Format response with LLM — ALWAYS include the generated SQL (trust building)
 
 Key design principle (Master Guide 5.4):
-  "Always display the generated SQL query alongside the result to build trust
-  and enable validation by finance professionals."
+  Always display the generated SQL query alongside the result to build trust
+  and enable validation by finance professionals
 
 Usage:
     # As API server (FastAPI)
@@ -569,9 +529,9 @@ try:
 except ImportError:
     FASTAPI_AVAILABLE = False
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- Configuration
+-- ---------------------------------------------------------------------------
 
 logging.basicConfig(
     level=logging.INFO,
@@ -599,9 +559,9 @@ SQL_BLOCKED_KEYWORDS = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Data models
-# ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- Data models
+-- ---------------------------------------------------------------------------
 
 class QARequest(BaseModel):
     query: str
@@ -629,17 +589,17 @@ def get_search_client() -> SearchClient:
     )
 
 
-# ---------------------------------------------------------------------------
-# Step 1: Intent Classification
-# ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- Step 1: Intent Classification
+-- ---------------------------------------------------------------------------
 
 def classify_intent(client: AzureOpenAI, user_query: str) -> str:
-    """
+    
     Classify the user's financial question into one of four intent categories.
     Returns: 'kpi_lookup' | 'trend_analysis' | 'variance' | 'drill_down' | 'unknown'
-    """
-    classification_prompt = """You are an intent classifier for a financial analytics platform.
-Classify the user's question into exactly one category:
+    
+    classification_prompt = "You are an intent classifier for a financial analytics platform.
+Classify the users question into exactly one category':
 
 - kpi_lookup: User wants a specific KPI value for a specific period (e.g., "What was EBITDA in Q3?")
 - trend_analysis: User wants to see a KPI over multiple periods (e.g., "Show revenue trend for 2025")
@@ -647,7 +607,7 @@ Classify the user's question into exactly one category:
 - drill_down: User wants to go from summary to detail level (e.g., "Show me the top cost centres")
 - unknown: Query is not about financial data or cannot be answered by the system
 
-Respond with ONLY the category name, nothing else."""
+Respond with ONLY the category name, nothing else.
 
     response = client.chat.completions.create(
         model=AZURE_OPENAI_DEPLOYMENT,
@@ -662,16 +622,16 @@ Respond with ONLY the category name, nothing else."""
     return intent if intent in INTENT_CLASSES else "unknown"
 
 
-# ---------------------------------------------------------------------------
-# Step 2: Schema Context Retrieval (Vector Search)
-# ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- Step 2: Schema Context Retrieval (Vector Search)
+-- ---------------------------------------------------------------------------
 
 def retrieve_schema_context(search_client: SearchClient, openai_client: AzureOpenAI,
                              user_query: str, k: int = 5) -> str:
-    """
+    ""
     Retrieve relevant schema documentation from Azure Cognitive Search vector index.
     The index contains table descriptions, column definitions, and HU GAAP terminology.
-    """
+    ""
     # Generate embedding for semantic search
     embed_response = openai_client.embeddings.create(
         model="text-embedding-3-small",
@@ -695,40 +655,40 @@ def retrieve_schema_context(search_client: SearchClient, openai_client: AzureOpe
     context_parts = []
     for result in results:
         context_parts.append(
-            f"Table: {result.get('table_name', '')} "
-            f"Column: {result.get('column_name', '')} "
-            f"Description: {result.get('description', '')} "
-            f"HU GAAP: {result.get('hu_gaap_mapping', '')} "
-            f"Examples: {result.get('example_values', '')}"
+            fTable: {result.get('table_name', '')} 
+            fColumn: {result.get('column_name', '')} 
+            fDescription: {result.get('description', '')} 
+            fHU GAAP: {result.get('hu_gaap_mapping', '')} 
+            fExamples: {result.get('example_values', '')}
         )
 
     return "\n".join(context_parts)
 
 
-# ---------------------------------------------------------------------------
-# Step 3: SQL Generation
-# ---------------------------------------------------------------------------
+--  ---------------------------------------------------------------------------
+-- Step 3: SQL Generation
+-- ---------------------------------------------------------------------------
 
 def get_rls_clause(user_id: str, entity_code: Optional[str]) -> tuple[str, list]:
-    """
+    
     Build the Row-Level Security filter clause with parameterised values.
     Users are restricted to entities they are authorised for in config.rls_user_entity_map.
     This clause is injected into every generated SQL — cannot be bypassed.
 
     Returns:
         tuple: (rls_sql_clause, parameter_values) — use parameterised query execution
-    """
+    
     if entity_code:
         # If a specific entity is requested, still validate user has access
         return (
-            """AND e.entity_code IN (
+            ""AND e.entity_code IN (
                 SELECT entity_code FROM config.rls_user_entity_map
                 WHERE user_id = ?
                   AND entity_code = ?
                   AND is_active = TRUE
-            )""",
+            )"",
 
--- P1-D: CREATE TABLE config.rls_user_entity_map (Row-Level Security User-Entity Mapping)
+-- CREATE TABLE config.rls_user_entity_map (Row-Level Security User-Entity Mapping)
 CREATE TABLE IF NOT EXISTS config.rls_user_entity_map (
     user_id VARCHAR(100) NOT NULL, -- User identifier (e.g., email, Azure AD OID)
     entity_code VARCHAR(20) NOT NULL, -- Canonical entity code
