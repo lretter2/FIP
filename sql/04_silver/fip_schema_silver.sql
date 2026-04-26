@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS silver.dim_entity (
     dbt_updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE silver.dim_entity IS 'Entity dimension with full hierarchy. parent_entity_key enables recursive CTE consolidation in the Gold Zone. Power BI Row-Level Security filters on entity_key to enforce per-entity data access.
+COMMENT ON TABLE silver.dim_entity IS 'Entity dimension with full hierarchy. parent_entity_key enables recursive CTE consolidation in the Gold Zone. Power BI Row-Level Security filters on entity_key to enforce per-entity data access.'
 
 
 -- =============================================================================
@@ -259,7 +259,7 @@ CREATE INDEX IF NOT EXISTS idx_acct_master_pl_line        ON silver.account_mast
 CREATE INDEX IF NOT EXISTS idx_acct_master_review         ON silver.account_master (review_status) WHERE review_status != 'APPROVED';
 
 COMMENT ON TABLE  silver.account_master IS 'Governance-grade account master. Every local HU GAAP account code mapped to the universal taxonomy. Populated by dbt from config.ref_coa_mapping. review_status must be APPROVED for every row before the entity goes live — unmapped or PENDING accounts produce NULL KPIs downstream.
--- T-01 ARCHITECTURE NOTE: silver.account_master is NOT a duplicate of config.ref_coa_mapping.
+-- Silver.account_master is NOT a duplicate of config.ref_coa_mapping.
 --   Fields unique to account_master (not in ref_coa_mapping): hu_gaap_bs_line, hu_gaap_pl_line,
 --   bs_section, is_reconciling, local_account_name_en, mapping_reviewed_by/at, dbt_run_id.
 --   Fields unique to ref_coa_mapping: erp-level reviewed_by/at, created_at/updated_at audit trail.
