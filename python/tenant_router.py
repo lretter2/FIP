@@ -140,8 +140,6 @@ class TenantRouter:
         registry: Optional[TenantRegistry] = None,
         strategies: Optional[List] = None,
     ) -> None:
-        if not JWT_SECRET:
-            raise ValueError("JWT_SECRET environment variable is required")
         self.registry = registry or get_registry()
         if strategies is not None:
             self._strategies: List = strategies
@@ -192,6 +190,8 @@ class TenantRouter:
         Raises:
           TenantAuthenticationError: If token is invalid or missing tenant_id
         """
+        if not JWT_SECRET:
+            raise TenantAuthenticationError("JWT_SECRET environment variable is not configured")
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
 
