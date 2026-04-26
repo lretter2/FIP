@@ -1,2 +1,1 @@
-- name: Codelyze - Coverage
   uses: codelyze/action@3.0.0
