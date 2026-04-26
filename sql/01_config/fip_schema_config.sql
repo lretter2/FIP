@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS config.ref_entity_master (
     updated_at              TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE  config.ref_entity_master IS 'Master list of all legal entities. Every other table with a company_id or entity_id foreign key depends on this. Populate before anything else.';
+COMMENT ON TABLE  config.ref_entity_master IS 'Master list of all legal entities. Every other table with a entity_id or entity_id foreign key depends on this. Populate before anything else.';
 COMMENT ON COLUMN config.ref_entity_master.fiscal_year_start_month IS 'Set to 1 for calendar fiscal year (Jan–Dec). Set to 7 for July–June fiscal year, etc.';
 COMMENT ON COLUMN config.ref_entity_master.consolidation_method    IS 'FULL = 100% consolidation. EQUITY = equity method only. PROPORTIONAL = proportional share. NONE = excluded from group consolidation.';
 

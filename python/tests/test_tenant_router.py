@@ -64,16 +64,16 @@ def router(registry, monkeypatch):
 
 class TestExtractTenantFromJwt:
     def test_valid_token_returns_all_claims(self, router):
-        token = _make_jwt({"tenant_id": "tenant_1", "user_id": "alice@corp.com", "company_id": "E001"})
+        token = _make_jwt({"tenant_id": "tenant_1", "user_id": "alice@corp.com", "entity_id": "E001"})
         result = router.extract_tenant_from_jwt(token)
         assert result["tenant_id"] == "tenant_1"
         assert result["user_id"] == "alice@corp.com"
-        assert result["company_id"] == "E001"
+        assert result["entity_id"] == "E001"
 
-    def test_token_without_company_id_defaults_to_none(self, router):
+    def test_token_without_entity_id_defaults_to_none(self, router):
         token = _make_jwt({"tenant_id": "tenant_1", "user_id": "alice@corp.com"})
         result = router.extract_tenant_from_jwt(token)
-        assert result["company_id"] is None
+        assert result["entity_id"] is None
 
     def test_token_without_user_id_defaults_to_unknown(self, router):
         token = _make_jwt({"tenant_id": "tenant_1"})
@@ -188,10 +188,10 @@ class TestRouteRequest:
         assert ctx.user_id == "alice@corp.com"
         assert ctx.is_authenticated is True
 
-    def test_jwt_path_passes_company_id(self, router):
-        header = self._jwt_header({"tenant_id": "tenant_1", "user_id": "alice@corp.com", "company_id": "E001"})
+    def test_jwt_path_passes_entity_id(self, router):
+        header = self._jwt_header({"tenant_id": "tenant_1", "user_id": "alice@corp.com", "entity_id": "E001"})
         ctx = router.route_request(header, {})
-        assert ctx.company_id == "E001"
+        assert ctx.entity_id == "E001"
 
     def test_jwt_path_unknown_tenant_raises(self, router):
         header = self._jwt_header({"tenant_id": "ghost", "user_id": "alice@corp.com"})
@@ -236,7 +236,7 @@ class TestApplyRlsFilter:
         return TenantContext(
             tenant_id=tenant_id,
             user_id="alice",
-            company_id=None,
+            entity_id=None,
             database=_make_db(tenant_id),
             request_id="r1",
         )
@@ -283,7 +283,7 @@ class TestGetSchemaPrefix:
         ctx = TenantContext(
             tenant_id="tenant_1",
             user_id="alice",
-            company_id=None,
+            entity_id=None,
             database=_make_db("tenant_1"),
             request_id="r1",
         )
@@ -301,7 +301,7 @@ class TestGetSchemaPrefix:
         ctx = TenantContext(
             tenant_id="tenant_rls",
             user_id="alice",
-            company_id=None,
+            entity_id=None,
             database=db,
             request_id="r1",
         )
@@ -315,7 +315,7 @@ class TestRequireTenant:
         return TenantContext(
             tenant_id="tenant_1",
             user_id="alice",
-            company_id=None,
+            entity_id=None,
             database=_make_db("tenant_1"),
             request_id="r1",
         )
@@ -384,12 +384,12 @@ class TestJWTExtractionStrategy:
         result = strategy.extract("Bearer not.a.jwt", {})
         assert result is None
 
-    def test_company_id_propagated(self, router):
+    def test_entity_id_propagated(self, router):
         from tenant_router import JWTExtractionStrategy
         strategy = JWTExtractionStrategy(router)
-        token = _make_jwt({"tenant_id": "tenant_1", "user_id": "alice@corp.com", "company_id": "E001"})
+        token = _make_jwt({"tenant_id": "tenant_1", "user_id": "alice@corp.com", "entity_id": "E001"})
         result = strategy.extract(f"Bearer {token}", {})
-        assert result.company_id == "E001"
+        assert result.entity_id == "E001"
 
 
 class TestAPIKeyExtractionStrategy:

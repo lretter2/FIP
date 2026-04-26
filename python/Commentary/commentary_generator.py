@@ -321,7 +321,7 @@ def write_commentary_to_queue(
 def parse_arguments():
     parser = argparse.ArgumentParser(description="FIP AI Commentary Generator")
     parser.add_argument("--entity_code", required=False, help="Entity code (canonical business key)")
-    parser.add_argument("--company_id", required=False, help="Deprecated alias for --entity_code")
+    parser.add_argument("--entity_id", required=False, help="Deprecated alias for --entity_code")
     parser.add_argument("--period_key", required=True, type=int, help="Period key (YYYYMM)")
     parser.add_argument("--roles", default="CFO", help="Comma separated roles: CFO,CEO,BOARD,INVESTOR")
     parser.add_argument("--languages", default="en", help="Comma separated languages: en,hu")
@@ -360,9 +360,9 @@ def process_commentaries(
 
 def main():
     args = parse_arguments()
-    entity_code = args.entity_code or args.company_id
+    entity_code = args.entity_code or args.entity_id
     if not entity_code:
-        raise ValueError("Provide --entity_code (or legacy --company_id)")
+        raise ValueError("Provide --entity_code (or legacy --entity_id)")
 
     roles = [r.strip().upper() for r in args.roles.split(",")]
     languages = [l.strip().lower() for l in args.languages.split(",")]

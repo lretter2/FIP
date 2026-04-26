@@ -50,7 +50,7 @@ TEST_MODE                = os.getenv("TEST_MODE", "false").lower() == "true"
 class QARequest(BaseModel):
     query: str
     user_id: str
-    company_id: Optional[str] = None
+    entity_id: Optional[str] = None
     language: str = "en"
 
 
@@ -187,7 +187,7 @@ async def tenant_info(context: TenantContext = Depends(get_tenant_context)):
         "tenant_id":       context.tenant_id,
         "tenant_name":     context.database.tenant_name,
         "user_id":         context.user_id,
-        "company_id":      context.company_id,
+        "entity_id":      context.entity_id,
         "schema_prefix":   tenant_router.get_schema_prefix(context),
         "database_server": context.database.server,
         "database_name":   context.database.database,

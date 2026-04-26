@@ -54,7 +54,7 @@ def _make_context(
     return TenantContext(
         tenant_id=tenant_id,
         user_id="alice@corp.com",
-        company_id=None,
+        entity_id=None,
         database=_make_db(tenant_id, isolation_model),
         request_id="r1",
     )

@@ -25,7 +25,7 @@ cleaned as (
 
     select
         -- Entity and period
-        cast(company_id           as varchar(50))   as company_id,
+        cast(entity_id           as varchar(50))   as entity_id,
         cast(period_year          as int)           as period_year,
         cast(period_month         as int)           as period_month,
         cast(
@@ -62,7 +62,7 @@ cleaned as (
         'HU_GAAP' as gaap_basis
 
     from source
-    where company_id is not null
+    where entity_id is not null
       and local_account_code is not null
       and budget_amount_lcy is not null
 

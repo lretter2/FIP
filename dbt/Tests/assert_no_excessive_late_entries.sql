@@ -30,7 +30,7 @@
 with posting_periods as (
     select
         transaction_id,
-        company_id,
+        entity_id,
         local_account_code,
         source_system,
         posting_date,
@@ -59,7 +59,7 @@ with posting_periods as (
 
 select
     transaction_id,
-    company_id,
+    entity_id,
     local_account_code,
     source_system,
     posting_date,

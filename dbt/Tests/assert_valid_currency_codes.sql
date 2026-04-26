@@ -13,7 +13,7 @@
 
 select
     f.transaction_id,
-    f.company_id,
+    f.entity_id,
     f.currency_local,
     f.posting_date,
     f.batch_id,

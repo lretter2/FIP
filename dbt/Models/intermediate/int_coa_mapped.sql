@@ -29,7 +29,7 @@ quarantined as (
     -- Unmapped accounts go to quarantine — never silently dropped
     select
         transaction_id,
-        company_id,
+        entity_id,
         local_account_code,
         posting_date,
         net_amount_lcy,
@@ -53,7 +53,7 @@ mapped as (
         -- Pass-through transaction identifiers
         t.transaction_id,
         t.batch_id,
-        t.company_id,
+        t.entity_id,
         t.source_system,
         t.document_number,
         t.document_type,
@@ -101,7 +101,7 @@ mapped as (
 
     from transactions t
     inner join coa_map m
-        on  t.company_id         = m.company_id
+        on  t.entity_id         = m.entity_id
         and t.local_account_code = m.local_account_code
 
 )

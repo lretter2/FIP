@@ -215,7 +215,7 @@ CREATE TABLE IF NOT EXISTS silver.dim_project (
 
 CREATE TABLE IF NOT EXISTS silver.account_master (
     account_id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    company_id              UUID            NOT NULL REFERENCES config.ref_entity_master(entity_id),
+    entity_id              UUID            NOT NULL REFERENCES config.ref_entity_master(entity_id),
     local_account_code      VARCHAR(50)     NOT NULL,
     local_account_name      VARCHAR(200)    NOT NULL,               -- e.g. 'Befejezetlen termelés'
     local_account_name_en   VARCHAR(200),
@@ -250,10 +250,10 @@ CREATE TABLE IF NOT EXISTS silver.account_master (
     -- dbt metadata
     dbt_updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     dbt_run_id              VARCHAR(100),                           -- dbt run identifier for lineage
-    UNIQUE (company_id, local_account_code, valid_from)
+    UNIQUE (entity_id, local_account_code, valid_from)
 );
 
-CREATE INDEX IF NOT EXISTS idx_acct_master_company_code   ON silver.account_master (company_id, local_account_code);
+CREATE INDEX IF NOT EXISTS idx_acct_master_company_code   ON silver.account_master (entity_id, local_account_code);
 CREATE INDEX IF NOT EXISTS idx_acct_master_universal_node ON silver.account_master (universal_node);
 CREATE INDEX IF NOT EXISTS idx_acct_master_pl_line        ON silver.account_master (pl_line_item) WHERE pl_line_item IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_acct_master_review         ON silver.account_master (review_status) WHERE review_status != 'APPROVED';

@@ -30,7 +30,7 @@ with mapped as (
 
     select distinct
         local_account_code,
-        company_id,
+        entity_id,
         account_type,
         normal_balance
     from {{ ref('int_coa_mapped') }}
@@ -43,7 +43,7 @@ violations as (
 
     select
         local_account_code,
-        company_id,
+        entity_id,
         account_type,
         normal_balance,
         case account_type

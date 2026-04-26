@@ -23,7 +23,7 @@
 
 with period_end_balances as (
     select
-        f.company_id,
+        f.entity_id,
         f.local_account_code,
         c.universal_node,
         c.pl_line_item,
@@ -40,13 +40,13 @@ with period_end_balances as (
     from {{ ref('fct_gl_transaction') }} f
     inner join {{ ref('ref_coa_mapping') }} c
         on  c.local_account_code = f.local_account_code
-        and c.company_id         = f.company_id
+        and c.entity_id         = f.entity_id
     where
         c.account_type    = 'REVENUE'
         and c.normal_balance  = 'C'        -- credit-normal accounts only
         and f.posting_date is not null
     group by
-        f.company_id,
+        f.entity_id,
         f.local_account_code,
         c.universal_node,
         c.pl_line_item,
@@ -55,7 +55,7 @@ with period_end_balances as (
 )
 
 select
-    company_id,
+    entity_id,
     local_account_code,
     universal_node,
     pl_line_item,

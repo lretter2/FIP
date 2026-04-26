@@ -32,7 +32,7 @@ renamed as (
         -- Primary identifiers
         cast(transaction_id          as varchar(100))  as transaction_id,
         cast(batch_id                as varchar(50))   as batch_id,
-        cast(company_id              as varchar(50))   as company_id,
+        cast(entity_id              as varchar(50))   as entity_id,
         cast(source_system           as varchar(30))   as source_system,
 
         -- Account and organisational keys (raw codes — not yet mapped)
@@ -95,7 +95,7 @@ renamed as (
         convert(varchar(64),
             hashbytes('SHA2_256',
                 concat(
-                    company_id, '|',
+                    entity_id, '|',
                     local_account_code, '|',
                     posting_date, '|',
                     document_number, '|',
@@ -111,7 +111,7 @@ renamed as (
     from source
 
     -- Exclude rows with no company or no account code (hard reject)
-    where company_id is not null
+    where entity_id is not null
       and local_account_code is not null
 
 )

@@ -17,7 +17,7 @@ sources:
         columns:
           - name: transaction_id
             tests: [not_null]
-          - name: company_id
+          - name: entity_id
             tests: [not_null]
           - name: local_account_code
             tests: [not_null]
@@ -29,7 +29,7 @@ sources:
       - name: raw_balance_sheet
         description: "Period-end balance sheet snapshots from ERP"
         columns:
-          - name: company_id
+          - name: entity_id
             tests: [not_null]
           - name: period_year
             tests: [not_null]
@@ -41,7 +41,7 @@ sources:
       - name: raw_budget
         description: "Monthly budget and forecast data uploaded by Finance team"
         columns:
-          - name: company_id
+          - name: entity_id
             tests: [not_null]
           - name: local_account_code
             tests: [not_null]
@@ -58,7 +58,7 @@ models:
       - name: transaction_id
         description: "Source ERP transaction identifier"
         tests: [not_null]
-      - name: company_id
+      - name: entity_id
         description: "Legal entity identifier"
         tests: [not_null]
       - name: local_account_code
@@ -85,7 +85,7 @@ models:
       Cleaned balance sheet snapshot staging layer.
       Derives HU GAAP account class from account code prefix.
     columns:
-      - name: company_id
+      - name: entity_id
         tests: [not_null]
       - name: period_key
         description: "YYYYMM integer period key"
@@ -100,7 +100,7 @@ models:
       Cleaned budget and forecast staging layer.
       Normalises budget_version to ORIGINAL_BUDGET / REVISED_BUDGET / ROLLING_FORECAST.
     columns:
-      - name: company_id
+      - name: entity_id
         tests: [not_null]
       - name: period_key
         tests: [not_null]

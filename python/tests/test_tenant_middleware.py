@@ -198,7 +198,7 @@ class TestGetTenantContext:
         ctx = TenantContext(
             tenant_id="tenant_1",
             user_id="alice",
-            company_id=None,
+            entity_id=None,
             database=_make_db(),
             request_id="r1",
         )
@@ -232,7 +232,7 @@ class TestTenantSecurityHeaders:
         return TenantContext(
             tenant_id=tenant_id,
             user_id="alice",
-            company_id=None,
+            entity_id=None,
             database=_make_db(tenant_id),
             request_id="r1",
         )
