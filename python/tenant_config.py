@@ -87,17 +87,17 @@ class TenantRegistry:
         synapse_db = os.getenv("SYNAPSE_DATABASE", "fip_dw")
 
         # Parse tenant definitions from env
-        # Format: TENANTS="tenant_1:ENTITY001,tenant_2:ENTITY002"
+        # Format: TENANTS="tenant_1,tenant_2"
+        # Legacy values with an entity suffix, e.g.
+        # TENANTS="tenant_1:ENTITY001,tenant_2:ENTITY002", are also accepted,
+        # but only the tenant_id is used for registry/database mapping here.
         tenants_env = os.getenv("TENANTS", "")
         api_keys_env = os.getenv("TENANT_API_KEYS", "")
 
         if tenants_env:
             for tenant_spec in tenants_env.split(","):
-                parts = tenant_spec.strip().split(":")
-                if len(parts) >= 2:
-                    tenant_id = parts[0].strip()
-                    entity_id = parts[1].strip()
-
+                tenant_id = tenant_spec.strip().split(":", 1)[0].strip()
+                if tenant_id:
                     # Schema-per-tenant: use tenant_id as schema prefix
                     self._tenants[tenant_id] = TenantDatabase(
                         tenant_id=tenant_id,
