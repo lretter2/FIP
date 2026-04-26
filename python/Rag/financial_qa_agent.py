@@ -460,10 +460,6 @@ class FinancialQAAgent:
             "row_count": len(df_result)
         }
 
-    def close(self):
-        pass
-
-
 # ---------------------------------------------------------------------------
 # FastAPI server (for Power BI Custom Visual or Teams bot integration)
 # ---------------------------------------------------------------------------
@@ -1066,17 +1062,14 @@ def main():
     args = parser.parse_args()
 
     qa = FinancialQAAgent()
-    try:
-        result = qa.answer(args.query, args.user_id, args.entity_code, args.language)
-        print("\n" + "="*70)
-        print(f"QUESTION: {result['question']}")
-        print(f"INTENT:   {result['intent']}")
-        print(f"ROWS:     {result['row_count']}")
-        print("-"*70)
-        print(f"ANSWER:\n{result['answer']}")
-        print("="*70)
-    finally:
-        qa.close()
+    result = qa.answer(args.query, args.user_id, args.entity_code, args.language)
+    print("\n" + "="*70)
+    print(f"QUESTION: {result['question']}")
+    print(f"INTENT:   {result['intent']}")
+    print(f"ROWS:     {result['row_count']}")
+    print("-"*70)
+    print(f"ANSWER:\n{result['answer']}")
+    print("="*70)
 
 
 if __name__ == "__main__":
