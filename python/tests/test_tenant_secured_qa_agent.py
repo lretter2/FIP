@@ -29,6 +29,7 @@ sys.modules.setdefault("db_utils", _db_utils_stub)
 
 from tenant_config import TenantDatabase, TenantIsolationModel
 from tenant_router import TenantContext
+from tenant_secured_qa_agent import validate_sql
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -146,3 +147,83 @@ class TestBuildTenantAwareQuery:
         ctx = _make_context("tenant_1")
         sql, _ = self._run(ctx, "SELECT * FROM audit.anomaly_queue")
         assert "FROM audit.anomaly_queue" in sql
+
+
+# ── validate_sql ───────────────────────────────────────────────────────────────
+
+class TestValidateSql:
+    """Tests for the sqlglot-based validate_sql() function."""
+
+    def test_simple_select_is_safe(self):
+        ok, msg = validate_sql("SELECT * FROM gold.kpi_profitability")
+        assert ok is True
+        assert msg == "OK"
+
+    def test_cte_select_is_safe(self):
+        ok, msg = validate_sql(
+            "WITH cte AS (SELECT revenue FROM gold.agg_pl_monthly) SELECT * FROM cte"
+        )
+        assert ok is True
+
+    def test_blocked_keyword_drop(self):
+        ok, msg = validate_sql("DROP TABLE gold.kpi_profitability")
+        assert ok is False
+        assert "DROP" in msg
+
+    def test_blocked_keyword_insert(self):
+        ok, msg = validate_sql("INSERT INTO gold.t VALUES(1)")
+        assert ok is False
+        assert "INSERT" in msg
+
+    def test_blocked_keyword_delete(self):
+        ok, msg = validate_sql("DELETE FROM gold.t WHERE x=1")
+        assert ok is False
+        assert "DELETE" in msg
+
+    def test_multi_statement_rejected(self):
+        ok, msg = validate_sql("SELECT 1; SELECT 2")
+        assert ok is False
+
+    def test_with_merge_rejected(self):
+        """WITH … MERGE must be rejected even though it starts with WITH."""
+        ok, _ = validate_sql(
+            "WITH cte AS (SELECT 1 AS x) "
+            "MERGE target USING cte ON target.id = cte.x "
+            "WHEN MATCHED THEN UPDATE SET y = 1"
+        )
+        assert ok is False
+
+    def test_with_merge_no_blocked_keywords_rejected_by_ast(self):
+        """WITH … MERGE is rejected via AST check even when no blocked keyword fires."""
+        ok, msg = validate_sql(
+            "WITH cte AS (SELECT 1 AS x) "
+            "MERGE target USING cte ON target.id = cte.x "
+            "WHEN NOT MATCHED THEN DO NOTHING"
+        )
+        assert ok is False
+        assert "SELECT" in msg
+
+    def test_unauthorized_schema_dbo_rejected(self):
+        ok, msg = validate_sql("SELECT * FROM dbo.users")
+        assert ok is False
+        assert "dbo" in msg.lower() or "unauthorized" in msg.lower()
+
+    def test_bracket_quoted_unauthorized_schema_rejected(self):
+        """Bracket-quoted [dbo] must be caught — regex patterns cannot do this."""
+        ok, msg = validate_sql("SELECT * FROM [dbo].[users]")
+        assert ok is False
+        assert "dbo" in msg.lower() or "unauthorized" in msg.lower()
+
+    def test_allowed_silver_schema(self):
+        ok, _ = validate_sql("SELECT * FROM silver.dim_entity")
+        assert ok is True
+
+    def test_allowed_config_schema(self):
+        ok, _ = validate_sql("SELECT * FROM config.ref_coa_mapping")
+        assert ok is True
+
+    def test_subquery_unauthorized_schema_rejected(self):
+        ok, msg = validate_sql(
+            "SELECT * FROM (SELECT * FROM information_schema.tables) sub"
+        )
+        assert ok is False

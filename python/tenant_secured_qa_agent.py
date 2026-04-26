@@ -14,8 +14,11 @@ NLP Pipeline (integrated from financial_qa_agent.py):
   6. Execute parameterized query
   7. Format result as natural-language answer via Azure OpenAI
 
-End-users submit natural-language questions only — raw SQL execution is never
-exposed to the caller.
+End-users submit natural-language questions only — raw SQL from the LLM is
+never exposed to the caller.  The ``generated_sql`` field in the API response
+contains the post-injection, execution-ready SQL (schema-prefixed + RLS
+filtered) for developer transparency and auditability; the raw LLM output is
+discarded before the response is formed.
 
 Usage:
     uvicorn tenant_secured_qa_agent:app --host 0.0.0.0 --port 8000
@@ -241,6 +244,16 @@ def retrieve_schema_context(search_client, openai_client, user_query: str, k: in
 def validate_sql(sql: str) -> tuple[bool, str]:
     """
     Validate generated SQL for safety before execution.
+
+    Uses sqlglot to parse the SQL AST so that:
+    - Multi-statement inputs are rejected.
+    - Only SELECT statements (including CTEs that end in SELECT) are accepted;
+      ``WITH … MERGE``, ``WITH … INSERT``, etc. are rejected.
+    - Allowed schemas (gold, silver, config) are enforced by inspecting
+      ``exp.Table`` nodes, handling bracket-quoted identifiers such as
+      ``[dbo].[table]`` that regex patterns cannot reliably catch.
+    - Blocked DML/DDL keywords are checked first as a fast pre-filter.
+
     Returns (is_safe, reason).
     """
     sql_upper = sql.upper()
@@ -248,16 +261,32 @@ def validate_sql(sql: str) -> tuple[bool, str]:
         pattern = r'\b' + re.escape(keyword) + r'\b'
         if re.search(pattern, sql_upper):
             return False, f"SQL contains blocked keyword: {keyword}"
-    stripped = sql_upper.strip()
-    if not stripped.startswith("SELECT") and not stripped.startswith("WITH"):
-        return False, "SQL must start with SELECT or WITH (CTE)"
-    allowed_schemas = {"GOLD", "SILVER", "CONFIG"}
-    matches = re.findall(r'\bFROM\s+(\w+)\.', sql_upper)
-    matches += re.findall(r'\bJOIN\s+(\w+)\.', sql_upper)
-    matches += re.findall(r'\bRIGHT\s+JOIN\s+(\w+)\.', sql_upper)
-    for schema in matches:
-        if schema not in allowed_schemas:
-            return False, f"Query references unauthorized schema: {schema}"
+
+    normalized_sql = sql.rstrip(";").strip()
+    try:
+        statements = sqlglot.parse(normalized_sql, dialect="tsql")
+    except sqlglot.errors.ParseError as exc:
+        return False, f"SQL could not be parsed: {exc}"
+
+    if not statements:
+        return False, "SQL parsing produced no statements"
+    if len(statements) > 1:
+        return False, "Multiple SQL statements detected"
+    if statements[0] is None:
+        return False, "SQL parsing produced an invalid statement"
+
+    stmt = statements[0]
+    if not isinstance(stmt, exp.Select):
+        return False, "SQL must be a SELECT statement (WITH...MERGE and other non-SELECT statements are not permitted)"
+
+    allowed_schemas = {"gold", "silver", "config"}
+    for table in stmt.find_all(exp.Table):
+        db = table.args.get("db")
+        if db:
+            schema_name = db.name.lower()
+            if schema_name not in allowed_schemas:
+                return False, f"Query references unauthorized schema: {db.name}"
+
     return True, "OK"
 
 
@@ -287,10 +316,11 @@ def generate_sql(openai_client, user_query: str, schema_context: str, intent: st
 
 
 def format_response(openai_client, user_query: str, df_result: pd.DataFrame,
-                    sql: str, intent: str, language: str = "en") -> str:
+                    intent: str, language: str = "en") -> str:
     """
     Use Azure OpenAI to format the raw query result into a natural-language financial answer.
-    Always includes the generated SQL in the response for transparency and trust.
+    SQL is not embedded in the formatted answer — callers use the ``generated_sql``
+    field of ``QAResponse`` if they need the execution SQL for transparency.
     """
     if df_result.empty:
         data_summary = "The query returned no results."
@@ -308,9 +338,7 @@ def format_response(openai_client, user_query: str, df_result: pd.DataFrame,
         f"Intent: {intent}\n"
         f"{lang_instruction}\n\n"
         f"Provide a clear, concise financial answer (3-5 sentences maximum).\n"
-        f"Use specific numbers from the data. Reference HU GAAP where relevant.\n"
-        f'End with the SQL query used to retrieve this data, labelled "SQL Query Used:".\n\n'
-        f"IMPORTANT: Always include the generated SQL so the user can validate the calculation."
+        f"Use specific numbers from the data. Reference HU GAAP where relevant."
     )
     response = openai_client.chat.completions.create(
         model=AZURE_OPENAI_DEPLOYMENT,
@@ -318,10 +346,7 @@ def format_response(openai_client, user_query: str, df_result: pd.DataFrame,
         temperature=0.2,
         max_tokens=600,
     )
-    answer = response.choices[0].message.content
-    if "SQL Query Used:" not in answer:
-        answer += f"\n\n**SQL Query Used:**\n```sql\n{sql}\n```"
-    return answer
+    return response.choices[0].message.content
 
 
 def build_tenant_aware_query(context: TenantContext, base_query: str) -> tuple[str, list]:
@@ -474,7 +499,7 @@ async def query_endpoint(
         return QAResponse(
             question=user_query,
             answer=f"This query could not be processed for security reasons: {reason}",
-            generated_sql=raw_sql,
+            generated_sql="",
             intent=intent,
             tenant_id=context.tenant_id,
             row_count=0,
@@ -495,7 +520,7 @@ async def query_endpoint(
 
     # -- Step 7: Format natural-language answer ------------------------
     try:
-        answer = format_response(openai_client, user_query, df, secured_sql, intent, request_data.language)
+        answer = format_response(openai_client, user_query, df, intent, request_data.language)
     except Exception as e:
         logger.warning(f"[{context.request_id}] Response formatting failed (using fallback): {e}")
         answer = f"Returned {len(df)} rows from {context.database.schema} schema."
