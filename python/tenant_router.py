@@ -38,7 +38,7 @@ class TenantContext:
     """
     tenant_id: str                  # Unique tenant identifier
     user_id: str                    # User making the request
-    entity_id: Optional[str]       # Optional: specific company within tenant
+    entity_id: Optional[str]       # Optional: specific entity within tenant
     database: TenantDatabase        # Tenant's database configuration
     request_id: str                 # Trace ID for logging
     is_authenticated: bool = True   # Authentication status
