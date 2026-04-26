@@ -401,15 +401,30 @@ class TenantRouter:
           (modified_query, parameter_values) for parameterized execution
         """
 
-        # Inject RLS WHERE clause if not already present
-        rls_clause = f"WHERE e.tenant_id = ? OR c.company_id IN (SELECT company_id FROM config.tenant_company_map WHERE tenant_id = ?)"
+        # Apply the same full RLS predicate in all cases, and when the query
+        # already contains a WHERE clause, wrap the existing condition to
+        # preserve operator precedence and prevent OR-based bypasses.
+        query_without_semicolon = base_query.rstrip().rstrip(";")
+        upper_query = query_without_semicolon.upper()
+        where_index = upper_query.find("WHERE")
+        rls_predicate = (
+            "e.tenant_id = ? OR c.company_id IN ("
+            "SELECT company_id FROM config.tenant_company_map WHERE tenant_id = ?)"
+        )
 
-        if "WHERE" not in base_query.upper():
-            modified_query = base_query.rstrip(";") + f"\n{rls_clause};"
-            params = [context.tenant_id, context.tenant_id]
+        if where_index == -1:
+            modified_query = (
+                query_without_semicolon + f"\nWHERE ({rls_predicate});"
+            )
         else:
-            modified_query = base_query.rstrip(";") + f"\nAND e.tenant_id = ?;"
-            params = [context.tenant_id]
+            query_prefix = query_without_semicolon[:where_index]
+            existing_conditions = query_without_semicolon[where_index + len("WHERE"):].strip()
+            modified_query = (
+                query_prefix
+                + f"WHERE ({existing_conditions}) AND ({rls_predicate});"
+            )
+
+        params = [context.tenant_id, context.tenant_id]
 
         return modified_query, params
 
