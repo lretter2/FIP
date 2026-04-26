@@ -110,7 +110,7 @@ renamed as (
 
     from source
 
-    -- Exclude rows with no company or no account code (hard reject)
+    -- Exclude rows with no entity_id or no account code (hard reject)
     where entity_id is not null
       and local_account_code is not null
 
